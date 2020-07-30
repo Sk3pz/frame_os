@@ -151,7 +151,7 @@ impl Writer {
                 || (s.bytes().nth(x + 1).unwrap() >= b'a' && s.bytes().nth(x + 1).unwrap() <= b'f'))
     }
 
-    pub fn write_string(&mut self, s: &str) { // TODO: Fix bug where you cant type '&'
+    pub fn write_string(&mut self, s: &str) {
         let mut colored = false;
         for x in 0..s.bytes().len() {
             let byte = s.bytes().nth(x).unwrap();
