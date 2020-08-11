@@ -29,4 +29,4 @@ TODO:
  - application running (make / run applications on the os, currently all processes are just the kernel)
  - more drivers
  - file system
- - better memeory management
+ - better memory management
