@@ -7,13 +7,13 @@ To build:
 
 2.) install bootimage with `cargo install bootimage` (must be run outside of the project directory or before the project is cloned / downloaded, otherwise the target won't be found)
 
-3.) install the rust source (for use of specific parts) with `rustup component add rust-src`.
+3.) set your toolchain version to nightly with `rustup override add nightly` (or `rustup override set nightly` if it is already installed)
 
-4.) Use the latest Rust Nightly target, and run `cargo build`. `cargo run` will also work.
+4.) install the rust source (for use of specific parts) with `rustup component add rust-src`.
 
-Dont have rust nightly? Install with `rustup override add nightly`
+5.) Use the latest Rust Nightly target, and run `cargo build`. `cargo run` will also work.
 
-(can be reset with `rustup override set stable`)
+(toolchain version can be reset with `rustup override set stable`)
 
 
 ----------------
