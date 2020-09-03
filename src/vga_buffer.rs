@@ -1,15 +1,16 @@
+use alloc::vec::Vec;
+use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
-use core::fmt;
-use alloc::vec::Vec;
 
 // ================= COLOR ENUM MAPPING
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Color { // create color variables for readability (even though I have the color ids memorized...)
+pub enum Color {
+    // create color variables for readability (even though I have the color ids memorized...)
     Black = 0,
     Blue = 1,
     Green = 2,
@@ -63,7 +64,7 @@ impl ScreenChar {
     pub fn new(c: u8, color: ColorCode) -> ScreenChar {
         ScreenChar {
             ascii_character: c,
-            color_code: color
+            color_code: color,
         }
     }
 }
@@ -71,26 +72,27 @@ impl ScreenChar {
 // ================= SCREEN STORAGE BUFFER
 
 struct Line {
-    chars: [ScreenChar; 80]
+    chars: [ScreenChar; 80],
 }
 
 struct FullBuffer {
     lines: Vec<Line>,
     screen_start: u8, // the line the screen will start displaying on
-    screen_end: u8
+    screen_end: u8,
 }
 
 enum VertDir {
-    UP, DOWN
+    UP,
+    DOWN,
 }
 
 impl FullBuffer {
-
     fn populate_vector(size: u8) -> Vec<Line> {
         let mut lines: Vec<Line> = Vec::new();
-        let chars: [ScreenChar; 80] = [ScreenChar::new(' ' as u8, ColorCode::new(Color::White, Color::Black)); 80];
+        let chars: [ScreenChar; 80] =
+            [ScreenChar::new(' ' as u8, ColorCode::new(Color::White, Color::Black)); 80];
         for i in 0..size {
-            lines.push(Line {chars})
+            lines.push(Line { chars })
         }
         lines
     }
@@ -99,20 +101,23 @@ impl FullBuffer {
         FullBuffer {
             lines: FullBuffer::populate_vector(display_location + BUFFER_HEIGHT), // make a new (empty) vector
             screen_start: display_location, // display_location will be the '0' for what the screen displays
-            screen_end: display_location + BUFFER_HEIGHT // ensure the buffer is sized correctly
+            screen_end: display_location + BUFFER_HEIGHT, // ensure the buffer is sized correctly
         }
     }
 
     pub fn move_screen(&mut self, dir: VertDir) {
         match dir {
-            UP => { // moves up (subtract a row)
-                if self.screen_start == 0 { // make sure the move isn't out of bounds
+            UP => {
+                // moves up (subtract a row)
+                if self.screen_start == 0 {
+                    // make sure the move isn't out of bounds
                     self.screen_start -= 1;
                     self.screen_end -= 1;
                 }
             }
             DOWN => {
-                if self.screen_end == ((self.lines.len() - 1) as u8) { // make sure the move isn't out of bounds
+                if self.screen_end == ((self.lines.len() - 1) as u8) {
+                    // make sure the move isn't out of bounds
                     self.screen_start += 1;
                     self.screen_end += 1;
                 }
@@ -125,12 +130,12 @@ impl FullBuffer {
 
 // ================= WRITING BUFFER
 
-const BUFFER_HEIGHT: usize = 25;
-const BUFFER_WIDTH: usize = 80;
+const BUFFER_HEIGHT: u8 = 25;
+const BUFFER_WIDTH: u8 = 80;
 
 #[repr(transparent)]
 struct Buffer {
-    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH as usize]; BUFFER_HEIGHT as usize],
 }
 
 // ================= WRITER
@@ -148,11 +153,11 @@ impl Writer {
             b'\r' => self.reset_cursor(),
             b'\x08' => self.backspace(),
             byte => {
-                if self.column_position >= BUFFER_WIDTH {
+                if self.column_position >= BUFFER_WIDTH as usize {
                     self.new_line();
                 }
 
-                let row = BUFFER_HEIGHT - 1;
+                let row: usize = BUFFER_HEIGHT as usize - 1;
                 let col = self.column_position;
 
                 self.buffer.chars[row][col].write(ScreenChar {
@@ -163,18 +168,18 @@ impl Writer {
             }
         }
     }
-    pub fn write_byte(&mut self, byte:u8) {
+    pub fn write_byte(&mut self, byte: u8) {
         self.write_byte_colored(byte, self.color_code);
     }
 
     fn new_line(&mut self) {
-        for row in 1..BUFFER_HEIGHT {
-            for col in 0..BUFFER_WIDTH {
+        for row in 1..BUFFER_HEIGHT as usize {
+            for col in 0..BUFFER_WIDTH as usize {
                 let character = self.buffer.chars[row][col].read();
                 self.buffer.chars[row - 1][col].write(character);
             }
         }
-        self.clear_row(BUFFER_HEIGHT - 1);
+        self.clear_row(BUFFER_HEIGHT as usize - 1);
         self.column_position = 0;
     }
 
@@ -183,25 +188,30 @@ impl Writer {
             ascii_character: b' ',
             color_code: self.color_code,
         };
-        for col in 0..BUFFER_WIDTH {
+        for col in 0..BUFFER_WIDTH as usize {
             self.buffer.chars[row][col].write(blank);
         }
     }
 
-    fn reset_cursor(&mut self) { // reset to start of current line
+    fn reset_cursor(&mut self) {
+        // reset to start of current line
         self.column_position = 0;
     }
 
     // TODO: WARNING: BACKSPACING TOO FAR BREAKS INPUT! FIX!
     // Issue may reside with newlines
-    fn backspace(&mut self) { // TODO: Fix to only allow for typed characters to be backspaced
+    fn backspace(&mut self) {
+        if self.column_position == 0 {
+            return;
+        }
         self.column_position -= 1; // move back one character
         self.write_byte(b' '); // write a space (clear char)
         self.column_position -= 1; // put cursor into correct position
     }
 
     fn write_str_continue(&mut self, byte: u8) {
-        match byte { // match the non color code byte
+        match byte {
+            // match the non color code byte
             // printable ASCII byte or newline
             0x20..=0x7e | b'\n' | b'\r' | b'\x08' => self.write_byte(byte),
             // Todo Register Character Escapes here!
@@ -211,7 +221,8 @@ impl Writer {
     }
 
     fn color_check(&mut self, x: usize, s: &str) -> bool {
-        s.bytes().nth(x).unwrap() == b'&' && s.bytes().len() > x + 1
+        s.bytes().nth(x).unwrap() == b'&'
+            && s.bytes().len() > x + 1
             && ((s.bytes().nth(x + 1).unwrap() >= b'0' && s.bytes().nth(x + 1).unwrap() <= b'9')
                 || (s.bytes().nth(x + 1).unwrap() >= b'a' && s.bytes().nth(x + 1).unwrap() <= b'f'))
     }
@@ -221,7 +232,8 @@ impl Writer {
         for x in 0..s.bytes().len() {
             let byte = s.bytes().nth(x).unwrap();
             if colored {
-                match byte { // determine the color TODO: Custom Background colors?
+                match byte {
+                    // determine the color TODO: Custom Background colors?
                     b'0' => self.color_code = ColorCode::new(Color::Black, Color::Black),
                     b'1' => self.color_code = ColorCode::new(Color::Blue, Color::Black),
                     b'2' => self.color_code = ColorCode::new(Color::Green, Color::Black),
@@ -238,10 +250,13 @@ impl Writer {
                     b'd' => self.color_code = ColorCode::new(Color::Pink, Color::Black),
                     b'e' => self.color_code = ColorCode::new(Color::Yellow, Color::Black),
                     b'f' => self.color_code = ColorCode::new(Color::White, Color::Black),
-                    _ => { // if not a color code, just print the normal text
+                    _ => {
+                        // if not a color code, just print the normal text
                         self.write_byte(b'&'); // COLOR INDICATOR CHAR SET HERE!
                         colored = self.color_check(x, s);
-                        if colored { continue; }
+                        if colored {
+                            continue;
+                        }
                         self.write_str_continue(byte);
                         continue; // as to not set colored to false if needed
                     }
@@ -250,7 +265,9 @@ impl Writer {
                 continue; // Continue the loop as there is nothing else to do.
             }
             colored = self.color_check(x, s);
-            if colored { continue; }
+            if colored {
+                continue;
+            }
             self.write_str_continue(byte);
         }
     }

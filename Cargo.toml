@@ -1,7 +1,7 @@
 [package]
 name = "frame_os"
 version = "2020.1.0"
-authors = ["Eric Shreve <ericshreve02@gmail.com>"]
+authors = ["Eric Shreve <ericshreve02@gmail.com>", "Robert Taliancich devmoocow9m@gmail.com"]
 edition = "2018"
 
 [profile.dev]
@@ -10,7 +10,7 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 opt-level = 3
-overflow-checks = true
+overflow-checks = false
 debug = false
 lto = true
 debug-assertions = false
