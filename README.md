@@ -21,14 +21,17 @@ Known bugs:
 
  - Backspacing a newline breaks input (requires restart)
  
- 
+In Process:
+
+ - Simple File System
+
 TODO:
  - Background color setting through print statements
  - VGA Driver
  - Custom Bootloader (using bootimage crate for rust)
  - command processing
- - gcc support
+ - built-in assembler
  - application running (make / run applications on the os, currently all processes are just the kernel)
  - more drivers
- - file system
+ - ext4 and NTFS file systems
  - better memory management
