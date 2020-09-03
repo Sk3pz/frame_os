@@ -2,13 +2,16 @@
 #![no_std]
 #![no_main]
 
-extern crate rlibc;
 extern crate alloc;
+extern crate rlibc;
 
-use frame_os::{println, print, task::{Task, executor::Executor, keyboard}};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use bootloader::{entry_point, BootInfo};
+use frame_os::{
+    print, println,
+    task::{executor::Executor, keyboard, Task},
+};
 use x86_64::VirtAddr;
-use bootloader::{BootInfo, entry_point};
-use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
 
 // ================= FEATURE TEST FUNCTIONS
 
@@ -38,9 +41,15 @@ async fn heap_test() {
     // create a reference counted vector -> will be freed when count reaches 0
     let reference_counted = Rc::new(vec![1, 2, 3]);
     let cloned_reference = reference_counted.clone();
-    println!("&6current reference count is &e{}", Rc::strong_count(&cloned_reference));
+    println!(
+        "&6current reference count is &e{}",
+        Rc::strong_count(&cloned_reference)
+    );
     core::mem::drop(reference_counted);
-    println!("&6reference count is &e{} &6now", Rc::strong_count(&cloned_reference));
+    println!(
+        "&6reference count is &e{} &6now",
+        Rc::strong_count(&cloned_reference)
+    );
 }
 
 // define the entry point as kmain() instead of _start()
@@ -68,7 +77,10 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     //"&7+--------------------------------------------------+", VERSION,
     //"&7+--------------------------------------------------+");
     // even more minimal:
-    println!("&bFrame&3OS &5v&d{} &2By &aEric Shreve&7", VERSION);
+    println!(
+        "&bFrame&3OS &5v&d{} &9By &3Eric Ryan Shreve &9&& &3Robert Matthew Taliancich Jr.&7",
+        VERSION
+    );
     // full version:
     //println!("{}\n&7> &bFrame&3OS\n&7> &5Version &d{} \n&7> &2Author: &aEric Shreve&e\n{}",
     //"&7----------------------", VERSION,
@@ -78,19 +90,18 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     // the physical memory offset
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // used for translating virtual addresses (mapper.translate_addr(virtual address))
-    let mut mapper = unsafe {memory::init(phys_mem_offset)};
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
     // create the frame allocator
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
     // initialize the heap
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("FrameOS Heap initialization failed.");
 
-
-    // ================= MAIN RUNTIME CODE 
+    // ================= MAIN RUNTIME CODE
 
     let mut executor = Executor::new();
     // executor.spawn(Task::new(async_test()));
-    // executor.spawn(Task::new(heap_test()));
+    //executor.spawn(Task::new(heap_test()));
     //executor.spawn(Task::new(loop_thing()));
     executor.spawn(Task::new(keyboard::print_keypresses()));
 
