@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
 use core::fmt;
+use alloc::vec::Vec;
 
 // ================= COLOR ENUM MAPPING
 
@@ -19,12 +20,12 @@ pub enum Color { // create color variables for readability (even though I have t
     LightGray = 7,
     DarkGray = 8,
     LightBlue = 9,
-    LightGreen = 10,
-    LightCyan = 11,
-    LightRed = 12,
-    Pink = 13,
-    Yellow = 14,
-    White = 15,
+    LightGreen = 10, // a
+    LightCyan = 11,  // b
+    LightRed = 12,   // c
+    Pink = 13,       // d
+    Yellow = 14,     // e
+    White = 15,      // f
 }
 
 // ================= STATIC WRITER MUTEX
@@ -56,6 +57,70 @@ impl ColorCode {
 struct ScreenChar {
     ascii_character: u8,
     color_code: ColorCode,
+}
+
+impl ScreenChar {
+    pub fn new(c: u8, color: ColorCode) -> ScreenChar {
+        ScreenChar {
+            ascii_character: c,
+            color_code: color
+        }
+    }
+}
+
+// ================= SCREEN STORAGE BUFFER
+
+struct Line {
+    chars: [ScreenChar; 80]
+}
+
+struct FullBuffer {
+    lines: Vec<Line>,
+    screen_start: u8, // the line the screen will start displaying on
+    screen_end: u8
+}
+
+enum VertDir {
+    UP, DOWN
+}
+
+impl FullBuffer {
+
+    fn populate_vector(size: u8) -> Vec<Line> {
+        let mut lines: Vec<Line> = Vec::new();
+        let chars: [ScreenChar; 80] = [ScreenChar::new(' ' as u8, ColorCode::new(Color::White, Color::Black)); 80];
+        for i in 0..size {
+            lines.push(Line {chars})
+        }
+        lines
+    }
+
+    pub fn new(display_location: u8) -> FullBuffer {
+        FullBuffer {
+            lines: FullBuffer::populate_vector(display_location + BUFFER_HEIGHT), // make a new (empty) vector
+            screen_start: display_location, // display_location will be the '0' for what the screen displays
+            screen_end: display_location + BUFFER_HEIGHT // ensure the buffer is sized correctly
+        }
+    }
+
+    pub fn move_screen(&mut self, dir: VertDir) {
+        match dir {
+            UP => { // moves up (subtract a row)
+                if self.screen_start == 0 { // make sure the move isn't out of bounds
+                    self.screen_start -= 1;
+                    self.screen_end -= 1;
+                }
+            }
+            DOWN => {
+                if self.screen_end == ((self.lines.len() - 1) as u8) { // make sure the move isn't out of bounds
+                    self.screen_start += 1;
+                    self.screen_end += 1;
+                }
+            }
+        }
+
+        // TODO: Redraw
+    }
 }
 
 // ================= WRITING BUFFER
