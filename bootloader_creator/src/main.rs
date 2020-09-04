@@ -79,11 +79,46 @@ fn craft_powershell_command(exe: &str, mut args: Vec<&str>) -> CommandLine {
     return craft_command("powershell", vec2, true);
 }
 
-fn main() {}
+fn clang_version(ver: &Vec<u8>) -> String {
+    let mut builder = "".to_string();
+    let string = std::str::from_utf8(&*ver).unwrap().to_string();
+    let mut start = string.find("version").unwrap() + 6;
+    let mut chars = string.chars();
+    chars.nth(start);
+    loop {
+        let tmp = chars.nth(0).unwrap();
+        if tmp.is_ascii_digit() || tmp == '.' {
+            builder.push(tmp);
+        } else if !builder.is_empty() {
+            return builder;
+        }
+    }
+}
+
+fn main() {
+    let is_windows = cfg!(target_os = "windows");
+    let nasm_exist = craft_command("nasm", vec!["-v"], is_windows)
+        .run()
+        .status
+        .success();
+    let cargo_exist = craft_command("cargo", vec!["-V"], is_windows).run();
+    let rustc_exist = craft_command("rustc", vec!["--version", "--verbose"], is_windows).run();
+    let llvm_clang_exist = craft_command("clang", vec!["-v"], is_windows).run();
+    println!(
+        "Has nasm: {}\nHas cargo: {}\nHas llvm_clang: {}\nHas rustc: {}\n\nVersion clang: {}\nVersion rustc_clang: {}",
+        nasm_exist,
+        cargo_exist.status.success(),
+        llvm_clang_exist.status.success(),
+        rustc_exist.status.success(),
+        clang_version(&llvm_clang_exist.stderr),
+        clang_version(&rustc_exist.stdout),
+    )
+}
 
 #[cfg(test)]
 mod tests {
     use crate::{craft_command, craft_powershell_command};
+
     #[test]
     fn check_caller() {
         let is_windows = cfg!(target_os = "windows");
