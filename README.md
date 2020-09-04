@@ -11,7 +11,9 @@ To build:
 
 4.) install the rust source (for use of specific parts) with `rustup component add rust-src`.
 
-5.) Use the latest Rust Nightly target, and run `cargo build`. `cargo run` will also work.
+5.) Use the latest Rust Nightly target, and run `build.bat`. `run.bat` will also work.
+
+6.) If .bat is not supported on the system, then simply change to the frame_kernel drectory and run `cargo run` or `cargo build` to compile and/or run the main project.
 
 (toolchain version can be reset with `rustup override set stable`)
 

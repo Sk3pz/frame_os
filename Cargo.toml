@@ -7,7 +7,7 @@ members = [
 	"simple_fs",
 ]
 exclude = [
-"frame_kernel",
+"frame_kernel", #cannot include until bootload is either fixed to support workspaces, or bootloader_creator crate finishes
 ]
 
 [profile.release]
