@@ -82,7 +82,10 @@ fn craft_powershell_command(exe: &str, mut args: Vec<&str>) -> CommandLine {
 fn clang_version(ver: &Vec<u8>) -> String {
     let mut builder = "".to_string();
     let string = std::str::from_utf8(&*ver).unwrap().to_string();
-    let mut start = string.find("version").unwrap() + 6;
+    let start = string.find("version").unwrap_or(string.len()) + 6;
+    if start > string.len() {
+        return "".to_string();
+    }
     let mut chars = string.chars();
     chars.nth(start);
     loop {
@@ -95,6 +98,20 @@ fn clang_version(ver: &Vec<u8>) -> String {
     }
 }
 
+fn version_major(string: String) -> u16 {
+    if string.is_empty() {
+        return 0;
+    }
+    let mut chars = string.chars();
+    let mut builder = "".to_string();
+    let mut tmp = chars.nth(0).unwrap_or('E');
+    while tmp.is_ascii_digit() {
+        builder.push(tmp);
+        tmp = chars.nth(0).unwrap_or('E');
+    }
+    return builder.parse().unwrap_or(0);
+}
+
 fn main() {
     let is_windows = cfg!(target_os = "windows");
     let nasm_exist = craft_command("nasm", vec!["-v"], is_windows)
@@ -104,15 +121,24 @@ fn main() {
     let cargo_exist = craft_command("cargo", vec!["-V"], is_windows).run();
     let rustc_exist = craft_command("rustc", vec!["--version", "--verbose"], is_windows).run();
     let llvm_clang_exist = craft_command("clang", vec!["-v"], is_windows).run();
+    let llvm_clang_major = version_major(clang_version(&llvm_clang_exist.stderr));
+    let rustc_clang_major = version_major(clang_version(&rustc_exist.stdout));
     println!(
         "Has nasm: {}\nHas cargo: {}\nHas llvm_clang: {}\nHas rustc: {}\n\nVersion clang: {}\nVersion rustc_clang: {}",
         nasm_exist,
         cargo_exist.status.success(),
         llvm_clang_exist.status.success(),
         rustc_exist.status.success(),
-        clang_version(&llvm_clang_exist.stderr),
-        clang_version(&rustc_exist.stdout),
-    )
+        llvm_clang_major,
+        rustc_clang_major,
+    );
+    if rustc_clang_major > llvm_clang_major {
+        println!(
+            "LLVM outdated or not installed globally! Need at least major version: {} Have major version: {}",
+            rustc_clang_major,
+            llvm_clang_major,
+        )
+    }
 }
 
 #[cfg(test)]
