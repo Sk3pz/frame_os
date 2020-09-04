@@ -6,18 +6,19 @@
 #![feature(const_fn)]
 #![feature(const_in_array_repeat_expressions)]
 #![feature(wake_trait)]
+#![feature(asm)]
 
 extern crate alloc;
 
 use core::panic::PanicInfo;
 
-pub mod interrupts;
-pub mod serial; // For use in debugging and testing ONLY! Not for use in main OS threads.
-pub mod vga_buffer;
-pub mod gdt;
-pub mod memory;
 pub mod allocator;
+pub mod gdt;
+pub mod interrupts;
+pub mod memory;
+pub mod serial; // For use in debugging and testing ONLY! Not for use in main OS threads.
 pub mod task;
+pub mod vga_buffer;
 
 // ================= INITIALIZATION
 

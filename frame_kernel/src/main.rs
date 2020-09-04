@@ -7,7 +7,7 @@ extern crate rlibc;
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use bootloader::{entry_point, BootInfo};
-use frame_os::{
+use frame_kernel::{
     print, println,
     task::{executor::Executor, keyboard, Task},
 };
@@ -67,8 +67,8 @@ async fn loop_thing() {
 // ================= ENTRY POINT
 
 fn kmain(boot_info: &'static BootInfo) -> ! {
-    use frame_os::allocator;
-    use frame_os::memory::{self, BootInfoFrameAllocator};
+    use frame_kernel::allocator;
+    use frame_kernel::memory::{self, BootInfoFrameAllocator};
 
     // ================= KERNEL INITIALIZATION
     // print version info to the screen
@@ -85,7 +85,7 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     //println!("{}\n&7> &bFrame&3OS\n&7> &5Version &d{} \n&7> &2Author: &aEric Shreve&e\n{}",
     //"&7----------------------", VERSION,
     //"&7----------------------");
-    frame_os::init(); // initialize the interrupt handlers
+    frame_kernel::init(); // initialize the interrupt handlers
 
     // the physical memory offset
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);

@@ -11,3 +11,5 @@ modules.xml
 target/
 Cargo.lock
 **/*.rs.bk
+**/Cargo.lock
+**/target
