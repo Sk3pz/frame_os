@@ -6,9 +6,7 @@ Building and Running:
 Current Versions:
 
 1.) Ensure QEMU is installed:
-    
     - download from https://www.qemu.org/ and install
-    
     - ensure qemu is added to path
 
 2.) Installing BootImage:
