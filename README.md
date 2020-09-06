@@ -3,7 +3,6 @@ FrameOS is an operating system using the Rust programming language with speed an
 
 Building and Running:
 
-```
 Current Versions:
 
 1.) Ensure QEMU is installed:
@@ -22,7 +21,6 @@ Current Versions:
     (must be run inside the project directory)
 5a.) Inside of `\frame_kernel`, you can use `cargo run` or `cargo build`
 6b.) To run the kernel, use `build.bat` or `run.bat`
-```
 
 ```
 *** FUTURE PLANNED BUILDING AND RUNNING ***
