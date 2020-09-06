@@ -8,11 +8,14 @@ Current Versions:
 
 1.) Installing BootImage:
     - run the command `rustup component add llvm-tools-preview`
-    - install bootimage with `cargo install bootimage` (must be run outside of the project directory due to our forced target)
+    - install bootimage with `cargo install bootimage` 
+      (must be run outside of the project directory due to our forced target)
 2.) Set the rust toolchain version to nightly to gain access to important features
-    - run the command `rustup override add nightly` or `rustup override set nightly` if already installed.
+    - run the command `rustup override add nightly` or `rustup override set nightly` 
+      if already installed.
         (can be set back to stable with `rustup override set stable`)
-3.) install the rust source so the kernel can recompile parts it uses with `rustup component add rust-src` 
+3.) install the rust source so the kernel can recompile parts it uses with 
+    `rustup component add rust-src` 
     (must be run inside the project directory)
 4a.) Inside of `\frame_kernel`, you can use `cargo run` or `cargo build`
 4b.) To run the kernel, use `build.bat` or `run.bat`
