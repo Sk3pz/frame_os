@@ -53,7 +53,6 @@ TODO:
  - built-in assembler
  - built-in c compiler
  - application running (make / run applications on the os, currently all processes are just the kernel)
- - more drivers
  - ext4 and NTFS file systems
  - better memory management
  - Support for .exe file execution
