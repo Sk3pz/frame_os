@@ -1,5 +1,5 @@
 # frame_os
-An x86_64 operating system written in rust
+FrameOS is an operating system using the Rust programming language with speed and security in mind. This project's design goal is to bring a new, lightweight OS that doesn't get in the way of your daily tasks.
 
 Building and Running:
 
