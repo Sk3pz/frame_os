@@ -10,14 +10,11 @@ Current Versions:
     - ensure qemu is added to path
 
 2.) Installing BootImage:
-    
     - run the command `rustup component add llvm-tools-preview`
-    
     - install bootimage with `cargo install bootimage` 
       (must be run outside of the project directory due to our forced target)
 
 3.) Set the rust toolchain version to nightly to gain access to important features
-    
     - run the command `rustup override add nightly` or `rustup override set nightly` 
       if already installed.
         (can be set back to stable with `rustup override set stable`)
