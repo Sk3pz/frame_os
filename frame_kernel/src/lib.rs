@@ -7,6 +7,7 @@
 #![feature(const_in_array_repeat_expressions)]
 #![feature(wake_trait)]
 #![feature(asm)]
+#![feature(c_variadic)]
 
 extern crate alloc;
 
@@ -19,6 +20,7 @@ pub mod memory;
 pub mod serial; // For use in debugging and testing ONLY! Not for use in main OS threads.
 pub mod task;
 pub mod vga_buffer;
+pub mod syscall;
 
 // ================= INITIALIZATION
 
