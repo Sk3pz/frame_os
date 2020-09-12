@@ -1,5 +1,5 @@
 [package]
-name = "bootloader_creator"
+name = "assembly_linker"
 version = "0.1.0"
 authors = ["Moocow9m <649310-Moocow9m@users.noreply.gitlab.com>"]
 edition = "2018"

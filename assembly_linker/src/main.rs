@@ -137,7 +137,12 @@ fn main() {
             "LLVM outdated or not installed globally! Need at least major version: {} Have major version: {}",
             rustc_clang_major,
             llvm_clang_major,
-        )
+        );
+        return;
+    }
+    if !nasm_exist {
+        println!("Nasm not found! Please install before continuing.");
+        return;
     }
 }
 
