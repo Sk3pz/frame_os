@@ -15,15 +15,6 @@ use x86_64::VirtAddr;
 
 // ================= FEATURE TEST FUNCTIONS
 
-async fn async_test_number() -> u32 {
-    42
-}
-
-async fn async_test() {
-    let number = async_test_number().await;
-    println!("async number: {}", number);
-}
-
 async fn heap_test() {
     // allocate a number on the heap
     let heap_value = Box::new(42);
@@ -58,39 +49,23 @@ entry_point!(kmain);
 // access the version as defined in cargo.toml
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-async fn loop_thing() {
-    loop {
-        print!("."); // TODO: Implement wait or sleep functions
-    }
-}
-
 // ================= ENTRY POINT
 
 fn kmain(boot_info: &'static BootInfo) -> ! {
     use frame_kernel::allocator;
     use frame_kernel::memory::{self, BootInfoFrameAllocator};
 
-    // ================= KERNEL INITIALIZATION
-    // print version info to the screen
-    // minimal version:
-    //println!("{}\n&7| &bFrame&3OS &7| &5Version &d{} &7| &2Author: &aEric Shreve&e &7|\n{}",
-    //"&7+--------------------------------------------------+", VERSION,
-    //"&7+--------------------------------------------------+");
-    // even more minimal:
     println!(
         "&bFrame&3OS &5v&d{} &9By &3Eric Ryan Shreve &9&& &3Robert Matthew Taliancich Jr.&7",
         VERSION
     );
-    // full version:
-    //println!("{}\n&7> &bFrame&3OS\n&7> &5Version &d{} \n&7> &2Author: &aEric Shreve&e\n{}",
-    //"&7----------------------", VERSION,
-    //"&7----------------------");
     frame_kernel::init(); // initialize the interrupt handlers
 
     // the physical memory offset
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // used for translating virtual addresses (mapper.translate_addr(virtual address))
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
+
     // create the frame allocator
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
     // initialize the heap
@@ -100,10 +75,8 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     // ================= MAIN RUNTIME CODE
 
     let mut executor = Executor::new();
-    // executor.spawn(Task::new(async_test()));
-    //executor.spawn(Task::new(heap_test()));
-    //executor.spawn(Task::new(loop_thing()));
-    executor.spawn(Task::new(keyboard::print_keypresses()));
+    // executor.spawn(Task::new(heap_test()));
+    // executor.spawn(Task::new(keyboard::print_keypresses())); // enables keyboard input
 
     executor.run();
 

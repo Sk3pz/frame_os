@@ -20,7 +20,7 @@ pub mod memory;
 pub mod serial; // For use in debugging and testing ONLY! Not for use in main OS threads.
 pub mod task;
 pub mod vga_buffer;
-pub mod syscall;
+pub mod system;
 
 // ================= INITIALIZATION
 
