@@ -1,6 +1,7 @@
 pub mod system {
     use alloc::string::String;
-    use crate::system::system::CallType::{Undefined, FileManipulation, ProcessControl, DeviceManipulation, InformationMaintenance, Communication};
+
+    use crate::system::system::CallType::{Communication, DeviceManipulation, FileManipulation, InformationMaintenance, ProcessControl, Undefined};
 
     pub enum ProcessControlCall {
         // TODO
@@ -24,7 +25,7 @@ pub mod system {
         Communication(CommunicationCall), Undefined()
     }
 
-    pub fn syscall(t: CallType) {
+    pub fn syscall(t: CallType) { // TODO: when implemented, add a return value
         match t {
             ProcessControl(pcc) => {
                 // TODO

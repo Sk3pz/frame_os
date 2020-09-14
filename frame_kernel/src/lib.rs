@@ -21,6 +21,7 @@ pub mod serial; // For use in debugging and testing ONLY! Not for use in main OS
 pub mod task;
 pub mod vga_buffer;
 pub mod system;
+pub mod logger;
 
 // ================= INITIALIZATION
 
@@ -64,10 +65,10 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 // ================= CUSTOM PANIC IMPLIMENTATION
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(_info: &PanicInfo) -> ! { // TODO: Timestamps
     println!("&4{}", _info);
 
-    hlt_loop();
+    hlt_loop(); // halt the os
 }
 
 // ================= HLT LOOP

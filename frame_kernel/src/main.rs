@@ -6,12 +6,15 @@ extern crate alloc;
 extern crate rlibc;
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
-use bootloader::{entry_point, BootInfo};
+
+use bootloader::{BootInfo, entry_point};
+use x86_64::VirtAddr;
+
 use frame_kernel::{
     print, println,
     task::{executor::Executor, keyboard, Task},
 };
-use x86_64::VirtAddr;
+use frame_kernel::logger::{LogChannel, Logger};
 
 // ================= FEATURE TEST FUNCTIONS
 
@@ -56,7 +59,7 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     use frame_kernel::memory::{self, BootInfoFrameAllocator};
 
     println!(
-        "&bFrame&3OS &5v&d{} &9By &3Eric Ryan Shreve &9&& &3Robert Matthew Taliancich Jr.&7",
+        "&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)&7",
         VERSION
     );
     frame_kernel::init(); // initialize the interrupt handlers
@@ -73,6 +76,18 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
         .expect("FrameOS Heap initialization failed.");
 
     // ================= MAIN RUNTIME CODE
+
+    let mut logger = Logger::new(LogChannel::STDOUT);
+
+    logger.show_debug = false;
+
+    logger.debug("This is a debug logging test");
+    logger.verbose("This is a verbose logging test");
+    logger.info("This is an info logging test");
+    logger.warn("This is a warning logging test");
+    logger.error("This is an error logging test");
+    logger.wtf("This is a failure logging test");
+
 
     let mut executor = Executor::new();
     // executor.spawn(Task::new(heap_test()));
