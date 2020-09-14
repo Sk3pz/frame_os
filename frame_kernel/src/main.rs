@@ -14,7 +14,10 @@ use frame_kernel::{
     print, println,
     task::{executor::Executor, keyboard, Task},
 };
-use frame_kernel::logger::{LogChannel, Logger};
+use frame_kernel::logger::Logger;
+use frame_kernel::write_channel::ChannelSTDERR;
+use frame_kernel::write_channel::ChannelSTDIN;
+use frame_kernel::write_channel::ChannelSTDOUT;
 
 // ================= FEATURE TEST FUNCTIONS
 
@@ -75,11 +78,14 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("FrameOS Heap initialization failed.");
 
+    // Initialize output channels
+    let stdout = ChannelSTDOUT {};
+    let stdin = ChannelSTDIN {};
+    let stderr = ChannelSTDERR {};
+
     // ================= MAIN RUNTIME CODE
 
-    let mut logger = Logger::new(LogChannel::STDOUT);
-
-    logger.show_debug = false;
+    let mut logger = Logger::new(&stdout);
 
     logger.debug("This is a debug logging test");
     logger.verbose("This is a verbose logging test");

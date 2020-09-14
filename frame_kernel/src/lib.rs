@@ -22,6 +22,7 @@ pub mod task;
 pub mod vga_buffer;
 pub mod system;
 pub mod logger;
+pub mod write_channel;
 
 // ================= INITIALIZATION
 

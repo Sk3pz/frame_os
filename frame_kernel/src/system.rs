@@ -39,7 +39,7 @@ pub mod system {
             InformationMaintenance(imc) => {
                 // TODO
             }
-            Communication(dmc) => {
+            Communication(cc) => {
                 // TODO
             }
             Undefined() => {
