@@ -1,7 +1,9 @@
 use alloc::string::String;
 
+use crate::println;
+
 pub trait WriteChannel {
-    fn write(&self, data: String);
+    fn write(&self, data: &str);
 }
 
 pub struct ChannelSTDOUT {
@@ -9,8 +11,8 @@ pub struct ChannelSTDOUT {
 }
 
 impl WriteChannel for ChannelSTDOUT {
-    fn write(&self, data: String) {
-        println!(data);
+    fn write(&self, data: &str) {
+        println!("{}", data);
     }
 }
 
@@ -19,8 +21,8 @@ pub struct ChannelSTDIN {
 }
 
 impl WriteChannel for ChannelSTDIN {
-    fn write(&self, data: String) {
-        println!(data);
+    fn write(&self, data: &str) {
+        println!("ON STDIN: {}", data);
     }
 }
 
@@ -29,7 +31,7 @@ pub struct ChannelSTDERR {
 }
 
 impl WriteChannel for ChannelSTDERR {
-    fn write(&self, data: String) {
-        println!(data);
+    fn write(&self, data: &str) {
+        println!("ON STDERR: {}", data);
     }
 }

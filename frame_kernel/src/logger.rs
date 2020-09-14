@@ -1,10 +1,11 @@
+use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 
 use crate::println;
 use crate::write_channel::WriteChannel;
 
-pub struct Logger {
-    channel: dyn WriteChannel,
+pub struct Logger<'a, C: WriteChannel> {
+    channel: &'a C,
     pub show_debug: bool,
     pub show_verbose: bool,
     pub show_info: bool,
@@ -13,9 +14,9 @@ pub struct Logger {
     pub show_wtf: bool
 }
 
-impl Logger {
+impl<'a, C: WriteChannel> Logger<'a, C> {
 
-    pub fn new<C: WriteChannel>(channel: &C) -> Logger {
+    pub fn new(channel: &C) -> Logger<C> {
         Logger {
             channel,
             show_debug: true,
@@ -27,49 +28,45 @@ impl Logger {
         }
     }
 
-    pub fn set_channel<C: WriteChannel>(&mut self, channel: &C) {
-        self.channel = channel;
-    }
-
     pub fn debug(&self, data: &str) {
         if !self.show_debug {
             return;
         }
-        self.channel.write("&8[DEBUG] > " + data);
+        self.channel.write(Box::leak(("&8[D] > ".to_string() + data).into_boxed_str()));
     }
 
     pub fn verbose(&self, data: &str) {
         if !self.show_verbose {
             return;
         }
-        self.channel.write("&8[&7VERBOSE&8] &7> &7" + data);
+        self.channel.write(Box::leak(("&8[&7V&8] &7> &7".to_string() + data).into_boxed_str()));
     }
 
     pub fn info(&self, data: &str) {
         if !self.show_info {
             return;
         }
-        self.channel.write("&8[&bINFO&8] &7> &f" + data);
+        self.channel.write(Box::leak(("&8[&bI&8] &7> &f".to_string() + data).into_boxed_str()));
     }
 
     pub fn warn(&self, data: &str) {
         if !self.show_warn {
             return;
         }
-        self.channel.write("&8[&eWARN&8] &7> &e" + data);
+        self.channel.write(Box::leak(("&8[&eW&8] &7> &e".to_string() + data).into_boxed_str()));
     }
 
     pub fn error(&self, data: &str) {
         if !self.show_err {
             return;
         }
-        self.channel.write("&8[&cERROR&8] &7> &c" + data);
+        self.channel.write(Box::leak(("&8[&cE&8] &7> &c".to_string() + data).into_boxed_str()));
     }
 
     pub fn wtf(&self, data: &str) {
         if !self.show_wtf {
             return;
         }
-        self.channel.write("&8[&4FAILURE&8] &7> &c" + data);
+        self.channel.write(Box::leak(("&8[&4!&8] &7> &4".to_string() + data).into_boxed_str()));
     }
 }
