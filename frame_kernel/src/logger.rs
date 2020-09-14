@@ -1,5 +1,4 @@
-use alloc::boxed::Box;
-use alloc::string::{String, ToString};
+use alloc::string::ToString;
 
 use crate::println;
 use crate::write_channel::WriteChannel;

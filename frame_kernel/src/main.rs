@@ -12,7 +12,7 @@ use x86_64::VirtAddr;
 
 use frame_kernel::{
     print, println,
-    task::{executor::Executor, keyboard, Task},
+    task::{executor::Executor, Task},
 };
 use frame_kernel::logger::Logger;
 use frame_kernel::write_channel::ChannelSTDERR;
@@ -85,7 +85,7 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
 
     // ================= MAIN RUNTIME CODE
 
-    let mut logger = Logger::new(&stdout);
+    let logger = Logger::new(&stdout);
 
     logger.debug("This is a debug logging test");
     logger.verbose("This is a verbose logging test");

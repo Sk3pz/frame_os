@@ -1,5 +1,6 @@
 use alloc::vec::Vec;
 use core::fmt;
+
 use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
@@ -107,7 +108,7 @@ impl FullBuffer {
 
     pub fn move_screen(&mut self, dir: VertDir) {
         match dir {
-            UP => {
+            VertDir::UP => {
                 // moves up (subtract a row)
                 if self.screen_start == 0 {
                     // make sure the move isn't out of bounds
@@ -115,7 +116,7 @@ impl FullBuffer {
                     self.screen_end -= 1;
                 }
             }
-            DOWN => {
+            VertDir::DOWN => {
                 if self.screen_end == ((self.lines.len() - 1) as u8) {
                     // make sure the move isn't out of bounds
                     self.screen_start += 1;
@@ -168,7 +169,7 @@ impl Writer {
             }
         }
     }
-    pub fn write_byte(&mut self, byte: u8) {
+    pub fn write_byte(&mut self, byte: u8) { // writes a bite to the screen
         self.write_byte_colored(byte, self.color_code);
     }
 
@@ -227,7 +228,7 @@ impl Writer {
                 || (s.bytes().nth(x + 1).unwrap() >= b'a' && s.bytes().nth(x + 1).unwrap() <= b'f'))
     }
 
-    pub fn write_string(&mut self, s: &str) {
+    pub fn write_string(&mut self, s: &str) { // the write function using write byte
         let mut colored = false;
         for x in 0..s.bytes().len() {
             let byte = s.bytes().nth(x).unwrap();

@@ -1,14 +1,16 @@
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
-use fixed_size_block::FixedSizeBlockAllocator;
-use crate::allocator::linked_list::LinkedListAllocator;
-use crate::allocator::bump::BumpAllocator;
+
+//use crate::allocator::bump::BumpAllocator;
 use x86_64::{
     structures::paging::{
-        mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
+        FrameAllocator, Mapper, mapper::MapToError, Page, PageTableFlags, Size4KiB,
     },
     VirtAddr,
 };
+
+//use fixed_size_block::FixedSizeBlockAllocator;
+use crate::allocator::linked_list::LinkedListAllocator;
 
 pub mod bump;
 pub mod fixed_size_block;
