@@ -283,6 +283,9 @@ impl fmt::Write for Writer {
 
 // ================= PRINTING MACROS
 
+// TODO: Put into separate file
+// TODO: Write to STDOUT instead of current when files are implemented
+
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));

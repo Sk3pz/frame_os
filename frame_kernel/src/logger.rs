@@ -38,34 +38,34 @@ impl<'a, C: WriteChannel> Logger<'a, C> {
         if !self.show_verbose {
             return;
         }
-        self.channel.write(&("&8[&7V&8] &7> &7".to_string() + data));
+        self.channel.write(&("&8[&7V&8] > &7".to_string() + data));
     }
 
     pub fn info(&self, data: &str) {
         if !self.show_info {
             return;
         }
-        self.channel.write(&("&8[&bI&8] &7> &f".to_string() + data));
+        self.channel.write(&("&8[&bI&8] > &f".to_string() + data));
     }
 
     pub fn warn(&self, data: &str) {
         if !self.show_warn {
             return;
         }
-        self.channel.write(&("&8[&eW&8] &7> &e".to_string() + data));
+        self.channel.write(&("&8[&eW&8] > &e".to_string() + data));
     }
 
     pub fn error(&self, data: &str) {
         if !self.show_err {
             return;
         }
-        self.channel.write(&("&8[&cE&8] &7> &c".to_string() + data));
+        self.channel.write(&("&8[&cE&8] > &c".to_string() + data));
     }
 
     pub fn wtf(&self, data: &str) {
         if !self.show_wtf {
             return;
         }
-        self.channel.write(&("&8[&4!&8] &7> &4".to_string() + data));
+        self.channel.write(&("&8[&4!&8] > &4".to_string() + data));
     }
 }
