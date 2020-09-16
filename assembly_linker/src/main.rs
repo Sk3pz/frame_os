@@ -1,46 +1,116 @@
 use std::fs::File;
-use std::io::{repeat, Read, Write};
-use std::ops::Sub;
+use std::io::{Read, Write};
 use std::process::{Command, Output};
 
-fn calculate_sector_total(
-    start_c: u8,
-    start_h: u8,
-    start_s: u8,
-    end_c: u8,
-    end_h: u8,
-    end_s: u8,
-) -> u32 {
-    let mut result: u32 = 0;
-    let mut c_head = start_h;
-    let mut c_sector = start_s;
-    let mut c_cylinder = start_c;
-    while c_head < end_h || c_sector < end_s || c_cylinder < end_c {
+#[derive(Clone, Copy)]
+struct CHS {
+    cylinder: u8,
+    head: u8,
+    sector: u8,
+}
+
+impl CHS {
+    fn calculate_sector_total(start_chs: CHS, end_chs: CHS) -> u32 {
+        let mut result: u32 = 0;
+        let mut current_chs = CHS {
+            cylinder: start_chs.cylinder,
+            head: start_chs.head,
+            sector: start_chs.sector,
+        };
+        while current_chs.cylinder < end_chs.cylinder
+            || current_chs.head < end_chs.head
+            || current_chs.sector < end_chs.sector
+        {
+            current_chs.increment();
+            result += 1;
+        }
         result += 1;
-        c_sector += 1;
-        if c_sector == 64 {
-            c_sector = 1;
-            c_head += 1;
-            if c_head == 255 {
-                c_head = 0;
-                c_cylinder += 1;
+        result
+    }
+
+    fn calculate_sector_distance(&self, other: CHS) -> u32 {
+        if self.cylinder == other.cylinder {
+            if self.head == other.head {
+                if self.sector == other.sector {
+                    0_u32
+                } else if self.sector > other.sector {
+                    CHS::calculate_sector_total(other, *self)
+                } else {
+                    CHS::calculate_sector_total(*self, other)
+                }
+            } else if self.head > other.head {
+                CHS::calculate_sector_total(other, *self)
+            } else {
+                CHS::calculate_sector_total(*self, other)
+            }
+        } else if self.cylinder > other.cylinder {
+            CHS::calculate_sector_total(other, *self)
+        } else {
+            CHS::calculate_sector_total(*self, other)
+        }
+    }
+
+    fn as_lba(&self) -> u32 {
+        let start_chs = CHS {
+            cylinder: 0,
+            head: 0,
+            sector: 2,
+        };
+        self.calculate_sector_distance(start_chs)
+    }
+
+    fn increment(&mut self) {
+        self.sector += 1;
+        if self.sector == 64 {
+            self.sector = 1;
+            self.head += 1;
+            if self.head == 255 {
+                self.head = 0;
+                self.cylinder += 1;
             }
         }
     }
-    result += 1;
-    result
+
+    fn decrement(&mut self) {
+        if self.sector <= 1 {
+            if self.head == 0 {
+                if self.cylinder == 0 {
+                    return;
+                } else {
+                    self.head = 254;
+                    self.sector = 63;
+                    self.cylinder -= 1;
+                }
+            } else {
+                self.sector = 63;
+                self.head -= 1;
+            }
+        } else {
+            self.sector -= 1
+        }
+    }
+
+    fn from_lba(lba: u32) -> CHS {
+        let mut current = CHS {
+            cylinder: 0,
+            head: 0,
+            sector: 2,
+        };
+        let mut result = 1_u32;
+        while result < lba {
+            current.increment();
+            result += 1;
+        }
+        current
+    }
 }
 
 #[derive(Clone, Copy)]
 struct Partition {
     status: u8,
-    start_cylinder: u8,
-    start_head: u8,
-    start_sector: u8,
+    start_chs: CHS,
     p_type: u8,
-    end_cylinder: u8,
-    end_head: u8,
-    end_sector: u8,
+    end_chs: CHS,
 }
 
 impl Partition {
@@ -48,83 +118,77 @@ impl Partition {
         if self.status == 0x00 {
             return 0x00;
         }
-        calculate_sector_total(
-            self.start_cylinder,
-            self.start_head,
-            self.start_sector,
-            self.end_cylinder,
-            self.end_head,
-            self.end_sector,
-        )
+        self.start_chs.calculate_sector_distance(self.end_chs)
     }
     fn start_lba(&self) -> u32 {
         if self.status == 0x00 {
             return 0x00;
         }
-        calculate_sector_total(
-            0,
-            0,
-            2,
-            self.start_cylinder,
-            self.start_head,
-            self.start_sector,
-        )
+        self.start_chs.as_lba()
     }
 
-    fn print(&self) {
+    fn print_record(&self) {
         println!("\tStatus: {}\n\tFirst:\n\t\tHead: {}\n\t\tSector: {}\n\t\tCylinder: {}\n\tType: {}\n\tLast:\n\t\tHead: {}\n\t\tSector: {}\n\t\tCylinder: {}\n\tLBA: {}\n\tSectors in partition: {}",
                  self.status,
-                 self.start_head,
-                 self.start_sector,
-                 self.start_cylinder,
+                 self.start_chs.head,
+                 self.start_chs.sector,
+                 self.start_chs.cylinder,
                  self.p_type,
-                 self.end_head,
-                 self.end_sector,
-                 self.end_cylinder,
+                 self.end_chs.head,
+                 self.end_chs.sector,
+                 self.end_chs.cylinder,
                  self.start_lba(),
                  self.total_sectors())
     }
 
-    fn write(&self, vector: &mut Vec<u8>) {
+    fn write_record(&self, vector: &mut Vec<u8>) {
         vector.push(self.status);
-        vector.push(self.start_head);
-        vector.push(self.start_sector);
-        vector.push(self.start_cylinder);
+        vector.push(self.start_chs.head);
+        vector.push(self.start_chs.sector);
+        vector.push(self.start_chs.cylinder);
         vector.push(self.p_type);
-        vector.push(self.end_head);
-        vector.push(self.end_sector);
-        vector.push(self.end_cylinder);
+        vector.push(self.end_chs.head);
+        vector.push(self.end_chs.sector);
+        vector.push(self.end_chs.cylinder);
         let integer = &self.start_lba().to_le_bytes();
         vector.write(integer).unwrap();
         let integer2 = &self.total_sectors().to_le_bytes();
         vector.write(integer2).unwrap();
     }
 
-    fn read(vector: &mut Vec<u8>) -> Partition {
+    fn read_record(vector: &mut Vec<u8>) -> Partition {
         let status = vector.remove(0);
         if status == 0x00 {
             let part = Partition {
                 status,
-                start_cylinder: 0,
-                start_head: 0,
-                start_sector: 0,
+                start_chs: CHS {
+                    cylinder: 0,
+                    head: 0,
+                    sector: 0,
+                },
                 p_type: 0,
-                end_cylinder: 0,
-                end_head: 0,
-                end_sector: 0,
+                end_chs: CHS {
+                    cylinder: 0,
+                    head: 0,
+                    sector: 0,
+                },
             };
             vector.drain(0..15);
             part
         } else {
             let part = Partition {
                 status,
-                start_head: vector.remove(0),
-                start_sector: vector.remove(0),
-                start_cylinder: vector.remove(0),
+                start_chs: CHS {
+                    head: vector.remove(0),
+                    sector: vector.remove(0),
+                    cylinder: vector.remove(0),
+                },
                 p_type: vector.remove(0),
-                end_head: vector.remove(0),
-                end_sector: vector.remove(0),
-                end_cylinder: vector.remove(0),
+                end_chs: CHS {
+                    head: vector.remove(0),
+                    sector: vector.remove(0),
+                    cylinder: vector.remove(0),
+                },
             };
             vector.resize(vector.len() - 8, 0x00);
             part
@@ -136,6 +200,7 @@ struct MBR {
     bootstrap: [u8; 440],
     signature: u32,
     copy_protected: bool,
+    blank_space: Partition,
     partition_1: Partition,
     partition_2: Partition,
     partition_3: Partition,
@@ -150,37 +215,66 @@ impl MBR {
             return;
         }
         println!("P1: ");
-        self.partition_1.print();
+        self.partition_1.print_record();
         if self.partition_2.status == 0x00 {
             return;
         }
         println!("P2: ");
-        self.partition_2.print();
+        self.partition_2.print_record();
         if self.partition_3.status == 0x00 {
             return;
         }
         println!("P3: ");
-        self.partition_3.print();
+        self.partition_3.print_record();
         if self.partition_4.status == 0x00 {
             return;
         }
         println!("P4: ");
-        self.partition_4.print();
+        self.partition_4.print_record();
     }
 
-    fn write(&self, vector: &mut Vec<u8>) {
-        vector.write(&self.bootstrap).unwrap();
+    fn write(&self, file: &mut File) {
+        let mut boot_vec: Vec<u8> = vec![];
+        boot_vec.write(&self.bootstrap).unwrap();
         let integer = &self.signature.to_le_bytes();
-        vector.write(integer).unwrap();
+        boot_vec.write(integer).unwrap();
         let num = if self.copy_protected { 0x5A } else { 0x00 };
-        vector.push(num);
-        vector.push(num);
-        self.partition_1.write(vector);
-        self.partition_2.write(vector);
-        self.partition_3.write(vector);
-        self.partition_4.write(vector);
-        vector.push(0x55);
-        vector.push(0xAA);
+        boot_vec.push(num);
+        boot_vec.push(num);
+        self.partition_1.write_record(&mut boot_vec);
+        self.partition_2.write_record(&mut boot_vec);
+        self.partition_3.write_record(&mut boot_vec);
+        self.partition_4.write_record(&mut boot_vec);
+        boot_vec.push(0x55);
+        boot_vec.push(0xAA);
+        file.write_all(&boot_vec).unwrap();
+        boot_vec.clear();
+        boot_vec.resize(512, 0x00);
+        if self.partition_1.status != 0x00 {
+            let mut x = self.partition_1.start_lba() + self.partition_1.total_sectors() - 1;
+            for _ in 0..x {
+                file.write_all(&boot_vec).unwrap();
+            }
+            if self.partition_2.status != 0x00 {
+                x = (self.partition_2.start_lba() - x) + self.partition_2.total_sectors() - 1;
+                for _ in 0..x {
+                    file.write_all(&boot_vec).unwrap();
+                }
+                if self.partition_3.status != 0x00 {
+                    x = (self.partition_3.start_lba() - x) + self.partition_3.total_sectors() - 1;
+                    for _ in 0..x {
+                        file.write_all(&boot_vec).unwrap();
+                    }
+                    if self.partition_4.status != 0x00 {
+                        x = (self.partition_4.start_lba() - x) + self.partition_4.total_sectors()
+                            - 1;
+                        for _ in 0..x {
+                            file.write_all(&boot_vec).unwrap();
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn read(vector: &mut Vec<u8>) -> MBR {
@@ -201,11 +295,37 @@ impl MBR {
             bootstrap,
             signature,
             copy_protected,
-            partition_1: Partition::read(vector),
-            partition_2: Partition::read(vector),
-            partition_3: Partition::read(vector),
-            partition_4: Partition::read(vector),
+            partition_1: Partition::read_record(vector),
+            partition_2: Partition::read_record(vector),
+            partition_3: Partition::read_record(vector),
+            partition_4: Partition::read_record(vector),
+            blank_space: Partition {
+                status: 0x00,
+                start_chs: CHS {
+                    cylinder: 0,
+                    head: 0,
+                    sector: 0,
+                },
+                p_type: 0x00,
+                end_chs: CHS {
+                    cylinder: 0,
+                    head: 0,
+                    sector: 0,
+                },
+            },
         };
+        if mbr.partition_1.status != 0x00 {
+            let start = CHS {
+                cylinder: 0,
+                head: 0,
+                sector: 2,
+            };
+            let end = CHS {
+                cylinder: mbr.partition_1.start_chs.cylinder,
+                head: mbr.partition_1.start_chs.head,
+                sector: mbr.partition_1.start_chs.sector,
+            };
+        }
         mbr
     }
 }
@@ -331,11 +451,17 @@ fn sectors_to_bytes(sectors: u32) {
 }
 
 fn build_mbr(is_windows: bool) -> bool {
-    let diskpath = std::path::Path::new("hdd.img");
-    let bios = std::path::Path::new("boot.bin");
-    let result = craft_command(
+    let sector = CHS::from_lba(2048);
+    println!(
+        "LBA to Sector: H: {} S: {} C: {}",
+        sector.head, sector.sector, sector.cylinder
+    );
+    let disk_path = std::path::Path::new("hdd.img");
+    let bootloader = std::path::Path::new("boot.bin");
+    let bootloader2 = std::path::Path::new("boot2.bin"); //todo
+    let mut result = craft_command(
         "nasm",
-        vec!["-f bin", "assembly/bootloader/mbr/main.asm", "-o boot.bin"],
+        vec!["-f bin", "assembly/bootloader/mbr/part1.asm", "-o boot.bin"],
         is_windows,
     )
     .run();
@@ -345,7 +471,22 @@ fn build_mbr(is_windows: bool) -> bool {
         return false;
     }
 
-    let mut bootable = File::open(bios).unwrap();
+    result = craft_command(
+        "nasm",
+        vec![
+            "-f bin",
+            "assembly/bootloader/mbr/part2.asm",
+            "-o boot2.bin",
+        ],
+        is_windows,
+    )
+    .run();
+    println!("{}", std::str::from_utf8(&result.stdout).unwrap());
+    if !result.status.success() {
+        eprintln!("Error: {}", std::str::from_utf8(&result.stderr).unwrap());
+        return false;
+    }
+    let mut bootable = File::open(bootloader).unwrap();
     let len = bootable.metadata().unwrap().len();
     if len > 512 {
         eprintln!("{} > 512! too big for MBR!", len);
@@ -359,37 +500,47 @@ fn build_mbr(is_windows: bool) -> bool {
     }
     let mut buffer: Vec<u8> = vec![];
     bootable.read_to_end(&mut buffer).unwrap();
-    while buffer.len() < 440 {
-        buffer.push(0)
+    if buffer.len() < 440 {
+        buffer.resize(440, 0x00);
     }
     if buffer.len() > 440 {
         buffer.drain(440..);
     }
-    let mut file = File::create(diskpath).unwrap();
+    let mut file = File::create(disk_path).unwrap();
     let empty = Partition {
         status: 0,
-        start_cylinder: 0,
-        start_head: 0,
-        start_sector: 0,
+        start_chs: CHS {
+            cylinder: 0,
+            head: 0,
+            sector: 0,
+        },
         p_type: 0,
-        end_cylinder: 0,
-        end_head: 0,
-        end_sector: 0,
+        end_chs: CHS {
+            cylinder: 0,
+            head: 0,
+            sector: 0,
+        },
+    };
+    let part_19_megabytes = Partition {
+        status: 0x80,
+        start_chs: CHS {
+            cylinder: 0,
+            head: 32,
+            sector: 33,
+        },
+        p_type: 0x7F,
+        end_chs: CHS {
+            cylinder: 2,
+            head: 140,
+            sector: 10,
+        },
     };
     let mut mbr = MBR {
         bootstrap: [0x00; 440],
-        signature: 0,
+        signature: 0xbebebe59,
         copy_protected: false,
-        partition_1: Partition {
-            status: 0x80,
-            start_cylinder: 0,
-            start_head: 32,
-            start_sector: 33,
-            p_type: 0x7F,
-            end_cylinder: 2,
-            end_head: 140,
-            end_sector: 10,
-        },
+        blank_space: empty,
+        partition_1: part_19_megabytes,
         partition_2: empty,
         partition_3: empty,
         partition_4: empty,
@@ -397,9 +548,7 @@ fn build_mbr(is_windows: bool) -> bool {
     for i in 0..440 {
         mbr.bootstrap[i] = buffer.remove(0);
     }
-    let mut vec: Vec<u8> = vec![];
-    mbr.write(&mut vec);
-    file.write_all(&vec).unwrap();
+    mbr.write(&mut file);
     mbr.print();
     return true;
 }
