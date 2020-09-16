@@ -1,4 +1,214 @@
+use std::fs::File;
+use std::io::{repeat, Read, Write};
+use std::ops::Sub;
 use std::process::{Command, Output};
+
+fn calculate_sector_total(
+    start_c: u8,
+    start_h: u8,
+    start_s: u8,
+    end_c: u8,
+    end_h: u8,
+    end_s: u8,
+) -> u32 {
+    let mut result: u32 = 0;
+    let mut c_head = start_h;
+    let mut c_sector = start_s;
+    let mut c_cylinder = start_c;
+    while c_head < end_h || c_sector < end_s || c_cylinder < end_c {
+        result += 1;
+        c_sector += 1;
+        if c_sector == 64 {
+            c_sector = 1;
+            c_head += 1;
+            if c_head == 255 {
+                c_head = 0;
+                c_cylinder += 1;
+            }
+        }
+    }
+    result += 1;
+    result
+}
+
+#[derive(Clone, Copy)]
+struct Partition {
+    status: u8,
+    start_cylinder: u8,
+    start_head: u8,
+    start_sector: u8,
+    p_type: u8,
+    end_cylinder: u8,
+    end_head: u8,
+    end_sector: u8,
+}
+
+impl Partition {
+    fn total_sectors(&self) -> u32 {
+        if self.status == 0x00 {
+            return 0x00;
+        }
+        calculate_sector_total(
+            self.start_cylinder,
+            self.start_head,
+            self.start_sector,
+            self.end_cylinder,
+            self.end_head,
+            self.end_sector,
+        )
+    }
+    fn start_lba(&self) -> u32 {
+        if self.status == 0x00 {
+            return 0x00;
+        }
+        calculate_sector_total(
+            0,
+            0,
+            2,
+            self.start_cylinder,
+            self.start_head,
+            self.start_sector,
+        )
+    }
+
+    fn print(&self) {
+        println!("\tStatus: {}\n\tFirst:\n\t\tHead: {}\n\t\tSector: {}\n\t\tCylinder: {}\n\tType: {}\n\tLast:\n\t\tHead: {}\n\t\tSector: {}\n\t\tCylinder: {}\n\tLBA: {}\n\tSectors in partition: {}",
+                 self.status,
+                 self.start_head,
+                 self.start_sector,
+                 self.start_cylinder,
+                 self.p_type,
+                 self.end_head,
+                 self.end_sector,
+                 self.end_cylinder,
+                 self.start_lba(),
+                 self.total_sectors())
+    }
+
+    fn write(&self, vector: &mut Vec<u8>) {
+        vector.push(self.status);
+        vector.push(self.start_head);
+        vector.push(self.start_sector);
+        vector.push(self.start_cylinder);
+        vector.push(self.p_type);
+        vector.push(self.end_head);
+        vector.push(self.end_sector);
+        vector.push(self.end_cylinder);
+        let integer = &self.start_lba().to_le_bytes();
+        vector.write(integer).unwrap();
+        let integer2 = &self.total_sectors().to_le_bytes();
+        vector.write(integer2).unwrap();
+    }
+
+    fn read(vector: &mut Vec<u8>) -> Partition {
+        let status = vector.remove(0);
+        if status == 0x00 {
+            let part = Partition {
+                status,
+                start_cylinder: 0,
+                start_head: 0,
+                start_sector: 0,
+                p_type: 0,
+                end_cylinder: 0,
+                end_head: 0,
+                end_sector: 0,
+            };
+            vector.drain(0..15);
+            part
+        } else {
+            let part = Partition {
+                status,
+                start_head: vector.remove(0),
+                start_sector: vector.remove(0),
+                start_cylinder: vector.remove(0),
+                p_type: vector.remove(0),
+                end_head: vector.remove(0),
+                end_sector: vector.remove(0),
+                end_cylinder: vector.remove(0),
+            };
+            vector.resize(vector.len() - 8, 0x00);
+            part
+        }
+    }
+}
+
+struct MBR {
+    bootstrap: [u8; 440],
+    signature: u32,
+    copy_protected: bool,
+    partition_1: Partition,
+    partition_2: Partition,
+    partition_3: Partition,
+    partition_4: Partition,
+}
+
+impl MBR {
+    fn print(&self) {
+        println!("Copy_Protected: {}", self.copy_protected);
+        if self.partition_1.status == 0x00 {
+            println!("No Partitions");
+            return;
+        }
+        println!("P1: ");
+        self.partition_1.print();
+        if self.partition_2.status == 0x00 {
+            return;
+        }
+        println!("P2: ");
+        self.partition_2.print();
+        if self.partition_3.status == 0x00 {
+            return;
+        }
+        println!("P3: ");
+        self.partition_3.print();
+        if self.partition_4.status == 0x00 {
+            return;
+        }
+        println!("P4: ");
+        self.partition_4.print();
+    }
+
+    fn write(&self, vector: &mut Vec<u8>) {
+        vector.write(&self.bootstrap).unwrap();
+        let integer = &self.signature.to_le_bytes();
+        vector.write(integer).unwrap();
+        let num = if self.copy_protected { 0x5A } else { 0x00 };
+        vector.push(num);
+        vector.push(num);
+        self.partition_1.write(vector);
+        self.partition_2.write(vector);
+        self.partition_3.write(vector);
+        self.partition_4.write(vector);
+        vector.push(0x55);
+        vector.push(0xAA);
+    }
+
+    fn read(vector: &mut Vec<u8>) -> MBR {
+        let mut bootstrap = [0; 440];
+        for i in 0..440 {
+            bootstrap[i] = vector.remove(0);
+        }
+        let signature = as_u32_le(
+            vector.remove(0),
+            vector.remove(0),
+            vector.remove(0),
+            vector.remove(0),
+        );
+        let cp_a = vector.remove(0);
+        let cp_b = vector.remove(0);
+        let copy_protected = cp_a == 0x5A && cp_b == 0x5A;
+        let mut mbr = MBR {
+            bootstrap,
+            signature,
+            copy_protected,
+            partition_1: Partition::read(vector),
+            partition_2: Partition::read(vector),
+            partition_3: Partition::read(vector),
+            partition_4: Partition::read(vector),
+        };
+        mbr
+    }
+}
 
 struct CommandLine {
     base: String,
@@ -112,6 +322,88 @@ fn version_major(string: String) -> u16 {
     return builder.parse().unwrap_or(0);
 }
 
+fn as_u32_le(x: u8, y: u8, z: u8, t: u8) -> u32 {
+    ((x as u32) << 0) + ((y as u32) << 8) + ((z as u32) << 16) + ((t as u32) << 24)
+}
+
+fn sectors_to_bytes(sectors: u32) {
+    println!("Bytes: {}", sectors * 512)
+}
+
+fn build_mbr(is_windows: bool) -> bool {
+    let diskpath = std::path::Path::new("hdd.img");
+    let bios = std::path::Path::new("boot.bin");
+    let result = craft_command(
+        "nasm",
+        vec!["-f bin", "assembly/bootloader/mbr/main.asm", "-o boot.bin"],
+        is_windows,
+    )
+    .run();
+    println!("{}", std::str::from_utf8(&result.stdout).unwrap());
+    if !result.status.success() {
+        eprintln!("Error: {}", std::str::from_utf8(&result.stderr).unwrap());
+        return false;
+    }
+
+    let mut bootable = File::open(bios).unwrap();
+    let len = bootable.metadata().unwrap().len();
+    if len > 512 {
+        eprintln!("{} > 512! too big for MBR!", len);
+        return false;
+    }
+    if len < 512 {
+        eprintln!(
+            "WARN: {} < 512! Smaller than full boot.bin size! Did you forget to pad the file?",
+            len
+        );
+    }
+    let mut buffer: Vec<u8> = vec![];
+    bootable.read_to_end(&mut buffer).unwrap();
+    while buffer.len() < 440 {
+        buffer.push(0)
+    }
+    if buffer.len() > 440 {
+        buffer.drain(440..);
+    }
+    let mut file = File::create(diskpath).unwrap();
+    let empty = Partition {
+        status: 0,
+        start_cylinder: 0,
+        start_head: 0,
+        start_sector: 0,
+        p_type: 0,
+        end_cylinder: 0,
+        end_head: 0,
+        end_sector: 0,
+    };
+    let mut mbr = MBR {
+        bootstrap: [0x00; 440],
+        signature: 0,
+        copy_protected: false,
+        partition_1: Partition {
+            status: 0x80,
+            start_cylinder: 0,
+            start_head: 32,
+            start_sector: 33,
+            p_type: 0x7F,
+            end_cylinder: 2,
+            end_head: 140,
+            end_sector: 10,
+        },
+        partition_2: empty,
+        partition_3: empty,
+        partition_4: empty,
+    };
+    for i in 0..440 {
+        mbr.bootstrap[i] = buffer.remove(0);
+    }
+    let mut vec: Vec<u8> = vec![];
+    mbr.write(&mut vec);
+    file.write_all(&vec).unwrap();
+    mbr.print();
+    return true;
+}
+
 fn main() {
     let is_windows = cfg!(target_os = "windows");
     let nasm_exist = craft_command("nasm", vec!["-v"], is_windows)
@@ -144,6 +436,9 @@ fn main() {
         println!("Nasm not found! Please install before continuing.");
         return;
     }
+    println!("Choose an option:\n\t0) Build all\n\t1) Build Bootloader\n\t2) Build Kernel");
+    build_mbr(is_windows);
+    //todo get user input here
 }
 
 #[cfg(test)]
