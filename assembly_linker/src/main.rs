@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::{repeat, Read, Write};
 use std::process::{Command, Output};
 
 struct CommandLine {
@@ -112,6 +114,140 @@ fn version_major(string: String) -> u16 {
     return builder.parse().unwrap_or(0);
 }
 
+fn as_u32_le(x: u8, y: u8, z: u8, t: u8) -> u32 {
+    ((x as u32) << 0) + ((y as u32) << 8) + ((z as u32) << 16) + ((t as u32) << 24)
+}
+
+fn sectors_to_bytes(sectors: u32) {
+    println!("Bytes: {}", sectors * 512)
+}
+
+fn calculate_sector_total(start_c: u8, start_h: u8, start_s: u8, end_c: u8, end_h: u8, end_s: u8) {
+    let mut result: u32 = 0;
+    let mut c_head = start_h;
+    let mut c_sector = start_s;
+    let mut c_cylinder = start_c;
+    while c_head != end_h || c_sector != end_s || c_cylinder != end_c {
+        result += 1;
+        c_sector += 1;
+        if c_sector == 64 {
+            c_sector = 1;
+            c_head += 1;
+            if c_head == 255 {
+                c_head = 0;
+                c_cylinder += 1;
+            }
+        }
+    }
+    result += 1;
+    println!("Result Sectors: {}", result);
+    sectors_to_bytes(result);
+}
+
+fn read_mbr() {
+    calculate_sector_total(0, 32, 33, 2, 140, 10);
+    let diskpath = std::path::Path::new("os.img");
+    let mut bootable = File::open(diskpath).unwrap();
+    let mut buffer: Vec<u8> = vec![];
+    while buffer.len() < 512 {
+        buffer.push(0);
+    }
+    bootable.read(&mut *buffer).unwrap();
+    buffer.drain(0..446);
+    buffer.reverse();
+    println!(
+        "P1:\n\tStatus: {}\n\tFirst:\n\t\tHead: {}\n\t\tSector: {}\n\t\tCylinder: {}\n\tType: {}\n\tLast:\n\t\tHead: {}\n\t\tSector: {}\n\t\tCylinder: {}\n\tLBA: {}\n\tSectors in partition: {}",
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        buffer.pop().unwrap(),
+        as_u32_le(buffer.pop().unwrap(), buffer.pop().unwrap(), buffer.pop().unwrap(), buffer.pop().unwrap()),
+        as_u32_le(buffer.pop().unwrap(), buffer.pop().unwrap(), buffer.pop().unwrap(), buffer.pop().unwrap())
+    );
+}
+
+fn build_mbr(is_windows: bool) -> bool {
+    read_mbr();
+    let diskpath = std::path::Path::new("hdd.img");
+    let bios = std::path::Path::new("boot.bin");
+    let result = craft_command(
+        "nasm",
+        vec!["-f bin", "assembly/bootloader/mbr/main.asm", "-o boot.bin"],
+        is_windows,
+    )
+    .run();
+    println!("{}", std::str::from_utf8(&result.stdout).unwrap());
+    if !result.status.success() {
+        eprintln!("Error: {}", std::str::from_utf8(&result.stderr).unwrap());
+        return false;
+    }
+
+    let mut file = File::create(diskpath).unwrap();
+    let mut bootable = File::open(bios).unwrap();
+    let len = bootable.metadata().unwrap().len();
+    if len > 512 {
+        eprintln!("{} > 512! too big for MBR!", len);
+        return false;
+    }
+    if len < 512 {
+        eprintln!(
+            "WARN: {} < 512! Smaller than full boot.bin size! Did you forget to pad the file?",
+            len
+        );
+    }
+    let mut buffer: Vec<u8> = vec![];
+    bootable.read_to_end(&mut buffer).unwrap();
+    while buffer.len() < 440 {
+        buffer.push(0)
+    }
+    if buffer.len() > 440 {
+        buffer.drain(440..);
+    }
+    buffer.push(0xbe); //Write Signature
+    buffer.push(0xbe);
+    buffer.push(0xbe);
+    buffer.push(0x7F);
+    buffer.push(0x00); //To copy protect: 0x5A else 0x00
+    buffer.push(0x00); //To copy protect: 0x5A else 0x00
+    file.write(&*buffer).unwrap(); //Write boot data
+    buffer.resize(0, 0x00);
+    buffer.push(0x80); //Bootable = 0x80. OFF = 0x00. normal = 0xbe
+    buffer.push(0x20); //First Head
+    buffer.push(0x21); //First Sector
+    buffer.push(0x00); //First Cylinder
+    buffer.push(0x7F); //Reserved for individual or local use and temporary or experimental projects
+    buffer.push(0x8C); //Last Head
+    buffer.push(0x0A); //Last Sector
+    buffer.push(0x02); //Last Cylinder
+    let lba = 2048_u32.to_le_bytes();
+    let sectors = 38912_u32.to_le_bytes();
+    buffer.push(*lba.get(0).unwrap());
+    buffer.push(*lba.get(1).unwrap());
+    buffer.push(*lba.get(2).unwrap());
+    buffer.push(*lba.get(3).unwrap());
+    buffer.push(*sectors.get(0).unwrap());
+    buffer.push(*sectors.get(1).unwrap());
+    buffer.push(*sectors.get(2).unwrap());
+    buffer.push(*sectors.get(3).unwrap());
+    file.write(&*buffer).unwrap();
+    println!("Wrote partition Header 1");
+    buffer.drain(..);
+    buffer.resize(16, 0x00); //Empty Partition
+    for i in 0..3 {
+        println!("Wrote partition Header {}", i + 2);
+        file.write(&*buffer).unwrap();
+    }
+    buffer.resize(0, 0x00);
+    buffer.push(0x55);
+    buffer.push(0xaa);
+    file.write(&*buffer).unwrap();
+    return true;
+}
+
 fn main() {
     let is_windows = cfg!(target_os = "windows");
     let nasm_exist = craft_command("nasm", vec!["-v"], is_windows)
@@ -144,6 +280,9 @@ fn main() {
         println!("Nasm not found! Please install before continuing.");
         return;
     }
+    println!("Choose an option:\n\t0) Build all\n\t1) Build Bootloader\n\t2) Build Kernel");
+    build_mbr(is_windows);
+    //todo get user input here
 }
 
 #[cfg(test)]
