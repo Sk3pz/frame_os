@@ -41,7 +41,6 @@ struct Partition {
     end_cylinder: u8,
     end_head: u8,
     end_sector: u8,
-    //lba: u32, //todo calculate this
 }
 
 impl Partition {
