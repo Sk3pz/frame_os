@@ -237,10 +237,10 @@ impl WriteBuffer {
     }
 
     pub fn draw(&mut self) {
-        for row in 0..25 {
+        for row in 0..SCREEN_HEIGHT {
             for col in 0..SCREEN_WIDTH {
                 self.display_buffer.chars[(row) as usize][col as usize]
-                    .write(self.full_buffer[(row + self.fb_display_pos) as usize][col as usize]);
+                    .write(self.full_buffer[(row + self.fb_display_pos) as usize][col as usize]); // This operation is the culprit for it being so slow
             }
         }
     }
