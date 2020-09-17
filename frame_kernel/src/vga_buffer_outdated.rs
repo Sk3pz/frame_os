@@ -47,14 +47,14 @@ impl ColorCode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-struct ScreenChar {
+struct OutDatedScreenChar {
     ascii_character: u8,
     color_code: ColorCode,
 }
 
-impl ScreenChar {
-    pub fn new(c: u8, color: ColorCode) -> ScreenChar {
-        ScreenChar {
+impl OutDatedScreenChar {
+    pub fn new(c: u8, color: ColorCode) -> OutDatedScreenChar {
+        OutDatedScreenChar {
             ascii_character: c,
             color_code: color,
         }
@@ -69,31 +69,31 @@ const SCREEN_WIDTH: u8 = 80;
 const BUFFER_HEIGHT: u8 = 124; // DO NOT SET BELOW 24!
 
 #[repr(transparent)]
-struct Buffer {
-    chars: [[Volatile<ScreenChar>; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize],
+struct OutDatedBuffer {
+    chars: [[Volatile<OutDatedScreenChar>; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize],
 }
 
-pub struct Writer {
+pub struct OutDatedWriter {
     line_pos: u8, // row / line position
     color_code: ColorCode, // the base color code
     column_pos: u8, // the current character (0-SCREEN_WIDTH) on the line
     fb_display_pos: u8, // the current start of the screen display in the full buffer
-    full_buffer: [[ScreenChar; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize], // all of the stored lines
-    display_buffer: &'static mut Buffer // the screen
+    full_buffer: [[OutDatedScreenChar; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize], // all of the stored lines
+    display_buffer: &'static mut OutDatedBuffer // the screen
 }
 
-impl Writer {
+impl OutDatedWriter {
 
-    pub fn new() -> Writer {
-        Writer {
+    pub fn new() -> OutDatedWriter {
+        OutDatedWriter {
             line_pos: 0,
             color_code: ColorCode::new(Color::White, Color::Black),
             column_pos: 0,
             fb_display_pos: 0,
-            full_buffer: [[ScreenChar::new(b' ',
+            full_buffer: [[OutDatedScreenChar::new(b' ',
                                            ColorCode::new(Color::White,
                                                           Color::Black)); SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize],
-            display_buffer: unsafe { &mut *(0xb8000 as *mut Buffer) }
+            display_buffer: unsafe { &mut *(0xb8000 as *mut OutDatedBuffer) }
         }
     }
 
@@ -119,9 +119,9 @@ impl Writer {
                 self.full_buffer[x as usize] = self.full_buffer[(x + 1) as usize];
             }
         }
-        self.full_buffer[(BUFFER_HEIGHT - 1) as usize] = [ScreenChar::new(b' ',
-                                                               ColorCode::new(Color::White,
-                                                                              Color::Black)); SCREEN_WIDTH as usize];
+        self.full_buffer[(BUFFER_HEIGHT - 1) as usize] = [OutDatedScreenChar::new(b' ',
+                                                                          ColorCode::new(Color::White,
+                                                                                         Color::Black)); SCREEN_WIDTH as usize];
     }
 
     pub fn newline(&mut self) {
@@ -153,7 +153,7 @@ impl Writer {
             b'\x08' => self.backspace(),
             // TODO: tab character
             byte => {
-                self.full_buffer[(self.line_pos) as usize][(self.column_pos) as usize] = ScreenChar {
+                self.full_buffer[(self.line_pos) as usize][(self.column_pos) as usize] = OutDatedScreenChar {
                     ascii_character: byte,
                     color_code: color
                 };
@@ -244,7 +244,7 @@ impl Writer {
 
 }
 
-impl fmt::Write for Writer {
+impl fmt::Write for OutDatedWriter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.write_string(s);
         Ok(())
@@ -254,7 +254,7 @@ impl fmt::Write for Writer {
 // ================= STATIC WRITER MUTEX
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer::new());
+    pub static ref OutDated_WRITER: Mutex<OutDatedWriter> = Mutex::new(OutDatedWriter::new());
 }
 
 // ================= PRINTING MACROS
@@ -263,22 +263,22 @@ lazy_static! {
 // TODO: Write to STDOUT instead of current when files are implemented
 
 #[macro_export]
-macro_rules! print {
+macro_rules! old_print {
     ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]
-macro_rules! println {
+macro_rules! old_println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
 #[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
+pub fn _old_print(args: fmt::Arguments) {
     use core::fmt::Write;
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {
-        WRITER.lock().write_fmt(args).unwrap();
+        OutDated_WRITER.lock().write_fmt(args).unwrap();
     });
 }

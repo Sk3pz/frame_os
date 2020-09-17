@@ -1,5 +1,6 @@
 use alloc::string::String;
 
+use crate::old_println;
 use crate::println;
 
 pub trait WriteChannel {
@@ -32,6 +33,6 @@ pub struct ChannelSTDERR {
 
 impl WriteChannel for ChannelSTDERR {
     fn write(&self, data: &str) {
-        println!("ON STDERR: {}", data);
+        old_println!("ON STDERR: {}", data);
     }
 }
