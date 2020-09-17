@@ -1,6 +1,6 @@
 [package]
 name = "frame_kernel"
-version = "0.0.1"
+version = "1.0.0-rc0"
 authors = ["Eric Shreve <ericshreve02@gmail.com>", "Robert Taliancich devmoocow9m@gmail.com"]
 edition = "2018"
 

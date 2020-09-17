@@ -19,10 +19,11 @@ pub mod interrupts;
 pub mod memory;
 pub mod serial; // For use in debugging and testing ONLY! Not for use in main OS threads.
 pub mod task;
-pub mod vga_buffer;
+pub mod ye_olde_vga_buffer;
 pub mod system;
 pub mod logger;
 pub mod write_channel;
+pub mod vga_buffer;
 
 // ================= INITIALIZATION
 

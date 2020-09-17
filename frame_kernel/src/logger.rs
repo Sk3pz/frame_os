@@ -62,7 +62,7 @@ impl<'a, C: WriteChannel> Logger<'a, C> {
         self.channel.write(&("&8[&cE&8] > &c".to_string() + data));
     }
 
-    pub fn wtf(&self, data: &str) {
+    pub fn wtf(&self, data: &str) { // Thx android! :D
         if !self.show_wtf {
             return;
         }

@@ -6,6 +6,7 @@ extern crate alloc;
 extern crate rlibc;
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use alloc::string::ToString;
 
 use bootloader::{BootInfo, entry_point};
 use x86_64::VirtAddr;
@@ -87,12 +88,9 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
 
     let logger = Logger::new(&stdout);
 
-    logger.debug("This is a debug logging test");
-    logger.verbose("This is a verbose logging test");
-    logger.info("This is an info logging test");
-    logger.warn("This is a warning logging test");
-    logger.error("This is an error logging test");
-    logger.wtf("This is a failure logging test");
+    for x in 0..30 {
+        logger.debug(&("Test Message: ".to_string() + &x.to_string()));
+    }
 
 
     let mut executor = Executor::new();
