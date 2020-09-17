@@ -73,7 +73,7 @@ struct Buffer {
     chars: [[Volatile<ScreenChar>; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize],
 }
 
-pub struct WriteBuffer {
+pub struct Writer {
     line_pos: u8, // row / line position
     color_code: ColorCode, // the base color code
     column_pos: u8, // the current character (0-SCREEN_WIDTH) on the line
@@ -82,10 +82,10 @@ pub struct WriteBuffer {
     display_buffer: &'static mut Buffer // the screen
 }
 
-impl WriteBuffer {
+impl Writer {
 
-    pub fn new() -> WriteBuffer {
-        WriteBuffer {
+    pub fn new() -> Writer {
+        Writer {
             line_pos: 0,
             color_code: ColorCode::new(Color::White, Color::Black),
             column_pos: 0,
@@ -106,7 +106,6 @@ impl WriteBuffer {
     }
 
     pub fn mov_d(&mut self) -> bool { // returns true if move was successful
-        // TODO: 25 may have to be 24            \/
         if self.fb_display_pos > BUFFER_HEIGHT - 25 { return false; }
 
         self.fb_display_pos += 1;
@@ -116,10 +115,9 @@ impl WriteBuffer {
 
     pub fn push_d(&mut self) {
         for x in 0..BUFFER_HEIGHT {
-            if x == BUFFER_HEIGHT - 1 {
-                continue;
+            if x != BUFFER_HEIGHT - 1 {
+                self.full_buffer[x as usize] = self.full_buffer[(x + 1) as usize];
             }
-            self.full_buffer[x as usize] = self.full_buffer[(x + 1) as usize];
         }
         self.full_buffer[(BUFFER_HEIGHT - 1) as usize] = [ScreenChar::new(b' ',
                                                                ColorCode::new(Color::White,
@@ -127,10 +125,9 @@ impl WriteBuffer {
     }
 
     pub fn newline(&mut self) {
-        // TODO: 24 may have to be 25             \/
         self.column_pos = 0;
-        if self.line_pos >= self.fb_display_pos + 24 && !self.mov_d() {
-            self.push_d();
+        if self.line_pos >= self.fb_display_pos + 25 && !self.mov_d() {
+            self.push_d(); // TODO: This does not work
             self.draw();
             return;
         } // move down a line
@@ -239,7 +236,7 @@ impl WriteBuffer {
     pub fn draw(&mut self) {
         for row in 0..SCREEN_HEIGHT {
             for col in 0..SCREEN_WIDTH {
-                self.display_buffer.chars[(row) as usize][col as usize]
+                self.display_buffer.chars[row as usize][col as usize]
                     .write(self.full_buffer[(row + self.fb_display_pos) as usize][col as usize]); // This operation is the culprit for it being so slow
             }
         }
@@ -247,13 +244,9 @@ impl WriteBuffer {
 
 }
 
-pub struct Writer {
-    buffer: WriteBuffer
-}
-
 impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.buffer.write_string(s);
+        self.write_string(s);
         Ok(())
     }
 }
@@ -261,9 +254,7 @@ impl fmt::Write for Writer {
 // ================= STATIC WRITER MUTEX
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        buffer: WriteBuffer::new(), // TODO: Fix
-    });
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer::new());
 }
 
 // ================= PRINTING MACROS

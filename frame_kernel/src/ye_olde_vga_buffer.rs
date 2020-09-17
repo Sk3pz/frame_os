@@ -1,3 +1,4 @@
+// use alloc::borrow::ToOwned;
 // use alloc::vec::Vec;
 // use core::fmt;
 //
@@ -30,16 +31,6 @@
 //     White = 15,      // f
 // }
 //
-// // ================= STATIC WRITER MUTEX
-//
-// lazy_static! {
-//     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-//         column_position: 0,
-//         color_code: ColorCode::new(Color::Yellow, Color::Black),
-//         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-//     });
-// }
-//
 // // ================= COLOR HANDLING
 //
 // #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,144 +61,112 @@
 //     }
 // }
 //
-// // ================= SCREEN STORAGE BUFFER
+// // ================= WRITING BUFFERS
 //
-// struct Line {
-//     chars: [ScreenChar; 80],
-// }
+// const SCREEN_HEIGHT: u8 = 25;
+// const SCREEN_WIDTH: u8 = 80;
 //
-// struct FullBuffer {
-//     lines: Vec<Line>,
-//     screen_start: u8, // the line the screen will start displaying on
-//     screen_end: u8,
-// }
-//
-// enum VertDir {
-//     UP,
-//     DOWN,
-// }
-//
-// impl FullBuffer {
-//     fn populate_vector(size: u8) -> Vec<Line> {
-//         let mut lines: Vec<Line> = Vec::new();
-//         let chars: [ScreenChar; 80] =
-//             [ScreenChar::new(' ' as u8, ColorCode::new(Color::White, Color::Black)); 80];
-//         for i in 0..size {
-//             lines.push(Line { chars })
-//         }
-//         lines
-//     }
-//
-//     pub fn new(display_location: u8) -> FullBuffer {
-//         FullBuffer {
-//             lines: FullBuffer::populate_vector(display_location + BUFFER_HEIGHT), // make a new (empty) vector
-//             screen_start: display_location, // display_location will be the '0' for what the screen displays
-//             screen_end: display_location + BUFFER_HEIGHT, // ensure the buffer is sized correctly
-//         }
-//     }
-//
-//     pub fn move_screen(&mut self, dir: VertDir) {
-//         match dir {
-//             VertDir::UP => {
-//                 // moves up (subtract a row)
-//                 if self.screen_start == 0 {
-//                     // make sure the move isn't out of bounds
-//                     self.screen_start -= 1;
-//                     self.screen_end -= 1;
-//                 }
-//             }
-//             VertDir::DOWN => {
-//                 if self.screen_end == ((self.lines.len() - 1) as u8) {
-//                     // make sure the move isn't out of bounds
-//                     self.screen_start += 1;
-//                     self.screen_end += 1;
-//                 }
-//             }
-//         }
-//
-//         // TODO: Redraw
-//     }
-// }
-//
-// // ================= WRITING BUFFER
-//
-// const BUFFER_HEIGHT: u8 = 25;
-// const BUFFER_WIDTH: u8 = 80;
+// const BUFFER_HEIGHT: u8 = 124; // DO NOT SET BELOW 24!
 //
 // #[repr(transparent)]
 // struct Buffer {
-//     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH as usize]; BUFFER_HEIGHT as usize],
+//     chars: [[Volatile<ScreenChar>; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize],
 // }
 //
-// // ================= WRITER
-//
 // pub struct Writer {
-//     column_position: usize,
-//     color_code: ColorCode,
-//     buffer: &'static mut Buffer,
+//     line_pos: u8, // row / line position
+//     color_code: ColorCode, // the base color code
+//     column_pos: u8, // the current character (0-SCREEN_WIDTH) on the line
+//     fb_display_pos: u8, // the current start of the screen display in the full buffer
+//     full_buffer: [[ScreenChar; SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize], // all of the stored lines
+//     display_buffer: &'static mut Buffer // the screen
 // }
 //
 // impl Writer {
+//
+//     pub fn new() -> Writer {
+//         Writer {
+//             line_pos: 0,
+//             color_code: ColorCode::new(Color::White, Color::Black),
+//             column_pos: 0,
+//             fb_display_pos: 0,
+//             full_buffer: [[ScreenChar::new(b' ',
+//                                            ColorCode::new(Color::White,
+//                                                           Color::Black)); SCREEN_WIDTH as usize]; BUFFER_HEIGHT as usize],
+//             display_buffer: unsafe { &mut *(0xb8000 as *mut Buffer) }
+//         }
+//     }
+//
+//     pub fn mov_u(&mut self) -> bool { // returns true if move was successful
+//         if self.fb_display_pos <= 0 { return false; }
+//
+//         self.fb_display_pos -= 1;
+//
+//         true
+//     }
+//
+//     pub fn mov_d(&mut self) -> bool { // returns true if move was successful
+//         if self.fb_display_pos > BUFFER_HEIGHT - 25 { return false; }
+//
+//         self.fb_display_pos += 1;
+//
+//         true
+//     }
+//
+//     pub fn push_d(&mut self) {
+//         for x in 0..BUFFER_HEIGHT {
+//             if x != BUFFER_HEIGHT - 1 {
+//                 self.full_buffer[x as usize] = self.full_buffer[(x + 1) as usize];
+//             }
+//         }
+//         self.full_buffer[(BUFFER_HEIGHT - 1) as usize] = [ScreenChar::new(b' ',
+//                                                                           ColorCode::new(Color::White,
+//                                                                                          Color::Black)); SCREEN_WIDTH as usize];
+//     }
+//
+//     pub fn newline(&mut self) {
+//         self.column_pos = 0;
+//         if self.line_pos >= self.fb_display_pos + 25 && !self.mov_d() {
+//             self.push_d(); // TODO: This does not work
+//             self.draw();
+//             return;
+//         } // move down a line
+//         self.line_pos += 1;
+//     }
+//
+//     pub fn ret(&mut self) {
+//         self.column_pos = 0;
+//     }
+//
+//     pub fn backspace(&mut self) {
+//         // TODO
+//     }
+//
+//     pub fn tab(&mut self) { // todo: 2, 3, or 4 spaces
+//         // TODO
+//     }
+//
 //     pub fn write_byte_colored(&mut self, byte: u8, color: ColorCode) {
 //         match byte {
-//             b'\n' => self.new_line(),
-//             b'\r' => self.reset_cursor(),
+//             b'\n' => self.newline(),
+//             b'\r' => self.ret(),
 //             b'\x08' => self.backspace(),
+//             // TODO: tab character
 //             byte => {
-//                 if self.column_position >= BUFFER_WIDTH as usize {
-//                     self.new_line();
-//                 }
-//
-//                 let row: usize = BUFFER_HEIGHT as usize - 1;
-//                 let col = self.column_position;
-//
-//                 self.buffer.chars[row][col].write(ScreenChar {
+//                 self.full_buffer[(self.line_pos) as usize][(self.column_pos) as usize] = ScreenChar {
 //                     ascii_character: byte,
-//                     color_code: color,
-//                 });
-//                 self.column_position += 1;
+//                     color_code: color
+//                 };
+//
+//                 self.column_pos += 1;
 //             }
 //         }
+//
+//         self.draw();
 //     }
-//     pub fn write_byte(&mut self, byte: u8) { // writes a bite to the screen
+//
+//     pub fn write_byte(&mut self, byte: u8) {
 //         self.write_byte_colored(byte, self.color_code);
-//     }
-//
-//     fn new_line(&mut self) {
-//         for row in 1..BUFFER_HEIGHT as usize {
-//             for col in 0..BUFFER_WIDTH as usize {
-//                 let character = self.buffer.chars[row][col].read();
-//                 self.buffer.chars[row - 1][col].write(character);
-//             }
-//         }
-//         self.clear_row(BUFFER_HEIGHT as usize - 1);
-//         self.column_position = 0;
-//     }
-//
-//     fn clear_row(&mut self, row: usize) {
-//         let blank = ScreenChar {
-//             ascii_character: b' ',
-//             color_code: self.color_code,
-//         };
-//         for col in 0..BUFFER_WIDTH as usize {
-//             self.buffer.chars[row][col].write(blank);
-//         }
-//     }
-//
-//     fn reset_cursor(&mut self) {
-//         // reset to start of current line
-//         self.column_position = 0;
-//     }
-//
-//     // TODO: WARNING: BACKSPACING TOO FAR BREAKS INPUT! FIX!
-//     // Issue may reside with newlines
-//     fn backspace(&mut self) {
-//         if self.column_position == 0 {
-//             return;
-//         }
-//         self.column_position -= 1; // move back one character
-//         self.write_byte(b' '); // write a space (clear char)
-//         self.column_position -= 1; // put cursor into correct position
 //     }
 //
 //     fn write_str_continue(&mut self, byte: u8) {
@@ -225,7 +184,7 @@
 //         s.bytes().nth(x).unwrap() == b'&'
 //             && s.bytes().len() > x + 1
 //             && ((s.bytes().nth(x + 1).unwrap() >= b'0' && s.bytes().nth(x + 1).unwrap() <= b'9')
-//                 || (s.bytes().nth(x + 1).unwrap() >= b'a' && s.bytes().nth(x + 1).unwrap() <= b'f'))
+//             || (s.bytes().nth(x + 1).unwrap() >= b'a' && s.bytes().nth(x + 1).unwrap() <= b'f'))
 //     }
 //
 //     pub fn write_string(&mut self, s: &str) { // the write function using write byte
@@ -271,7 +230,18 @@
 //             }
 //             self.write_str_continue(byte);
 //         }
+//         self.draw();
 //     }
+//
+//     pub fn draw(&mut self) {
+//         for row in 0..SCREEN_HEIGHT {
+//             for col in 0..SCREEN_WIDTH {
+//                 self.display_buffer.chars[row as usize][col as usize]
+//                     .write(self.full_buffer[(row + self.fb_display_pos) as usize][col as usize]); // This operation is the culprit for it being so slow
+//             }
+//         }
+//     }
+//
 // }
 //
 // impl fmt::Write for Writer {
@@ -279,6 +249,12 @@
 //         self.write_string(s);
 //         Ok(())
 //     }
+// }
+//
+// // ================= STATIC WRITER MUTEX
+//
+// lazy_static! {
+//     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer::new());
 // }
 //
 // // ================= PRINTING MACROS

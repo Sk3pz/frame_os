@@ -88,8 +88,8 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
 
     let logger = Logger::new(&stdout);
 
-    for x in 0..30 {
-        logger.debug(&("Test Message: ".to_string() + &x.to_string()));
+    for x in 0..200 {
+         logger.debug(&("Test Message: ".to_string() + &x.to_string()));
     }
 
 
