@@ -264,13 +264,13 @@ lazy_static! {
 
 #[macro_export]
 macro_rules! old_print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::vga_buffer_outdated::_old_print(format_args!($($arg)*)));
 }
 
 #[macro_export]
 macro_rules! old_println {
     () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::old_print!("{}\n", format_args!($($arg)*)));
 }
 
 #[doc(hidden)]
