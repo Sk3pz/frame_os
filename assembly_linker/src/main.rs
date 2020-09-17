@@ -24,7 +24,6 @@ impl CHS {
             current_chs.increment();
             result += 1;
         }
-        result += 1;
         result
     }
 
@@ -54,7 +53,7 @@ impl CHS {
         let start_chs = CHS {
             cylinder: 0,
             head: 0,
-            sector: 2,
+            sector: 1,
         };
         self.calculate_sector_distance(start_chs)
     }
@@ -71,11 +70,11 @@ impl CHS {
         }
     }
 
-    fn decrement(&mut self) {
+    fn decrement(&mut self) -> bool {
         if self.sector <= 1 {
             if self.head == 0 {
                 if self.cylinder == 0 {
-                    return;
+                    return false;
                 } else {
                     self.head = 254;
                     self.sector = 63;
@@ -88,15 +87,16 @@ impl CHS {
         } else {
             self.sector -= 1
         }
+        true
     }
 
     fn from_lba(lba: u32) -> CHS {
         let mut current = CHS {
             cylinder: 0,
             head: 0,
-            sector: 2,
+            sector: 1,
         };
-        let mut result = 1_u32;
+        let mut result = 0_u32;
         while result < lba {
             current.increment();
             result += 1;
@@ -118,7 +118,7 @@ impl Partition {
         if self.status == 0x00 {
             return 0x00;
         }
-        self.start_chs.calculate_sector_distance(self.end_chs)
+        self.start_chs.calculate_sector_distance(self.end_chs) + 1_u32
     }
     fn start_lba(&self) -> u32 {
         if self.status == 0x00 {
@@ -451,7 +451,7 @@ fn sectors_to_bytes(sectors: u32) {
 }
 
 fn build_mbr(is_windows: bool) -> bool {
-    let sector = CHS::from_lba(2048);
+    let sector = CHS::from_lba(0);
     println!(
         "LBA to Sector: H: {} S: {} C: {}",
         sector.head, sector.sector, sector.cylinder
