@@ -3,6 +3,10 @@ use alloc::string::String;
 use crate::old_println;
 use crate::println;
 
+pub const stdout: ChannelSTDOUT = ChannelSTDOUT {};
+pub const stdin: ChannelSTDIN = ChannelSTDIN {};
+pub const stderr: ChannelSTDERR = ChannelSTDERR {};
+
 pub trait WriteChannel {
     fn write(&self, data: &str);
 }

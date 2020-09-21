@@ -1,4 +1,5 @@
 use alloc::borrow::ToOwned;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -19,44 +20,49 @@ const DATA_BUFFER_SIZE: u8 = 124;
 const VGA_TEXTMODE_PTR: *mut u8 = 0xb8000 as *mut u8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ScreenChar { // a screenchar that can be displayed
+pub struct ScreenChar {
+    // a screenchar that can be displayed
     ascii: u8,
-    attr: u8
+    attr: u8,
 }
 
 impl ScreenChar {
     pub fn new(c: u8, attr: u8) -> ScreenChar {
         ScreenChar {
             ascii: c,
-            attr
+            attr,
         }
     }
 }
 
 /// Unsafe because the user must call a valid location and use of pointer offsets and writing
-pub unsafe fn write_byte(vga: *mut u8, byte: u8, row: u8, col: u8) { // TODO: THIS IS BROKEN. FIX.
-    vga.offset((((row as isize) * ((SCREEN_WIDTH * 2) as isize)) + ((col) as isize)) as isize).write(byte); // write to the correct position
+pub unsafe fn vga_write_byte(byte: u8, row: u8, col: u8) { // TODO: THIS IS BROKEN. FIX.
+    VGA_TEXTMODE_PTR.offset((((row as isize) * ((SCREEN_WIDTH * 2) as isize)) + ((col) as isize)) as isize).write(byte); // write to the correct position
     // multiplies row by width because thats how many characters are in a row
 }
 
-/// Unsafe because the user must call a valid location and use of unsafe function self.write_byte(...)
-pub unsafe fn write_raw(vga: *mut u8, b: u8, attr: u8, row: u8, col: u8) {
-    write_byte(vga, b, row, col); // write byte
-    write_byte(vga, attr, row, col + 1); // write attribute at offset
+/// Unsafe because the user must call a valid location and use of unsafe function vga_write_byte(...)
+pub unsafe fn vga_write_raw(b: u8, attr: u8, row: u8, col: u8) {
+    vga_write_byte(b, row, col); // write byte
+    vga_write_byte(attr, row, col + 1); // write attribute at offset
 }
 
-/// Unsafe because of call to self.write(...)
-pub unsafe fn write(vga: *mut u8, sc: ScreenChar, row: u8, col: u8) {
-    write_raw(vga, sc.ascii, sc.attr, row, col); // write a screenchar
+/// Unsafe because of call to vga_write_raw(...)
+pub unsafe fn vga_write(sc: ScreenChar, row: u8, col: u8) {
+    vga_write_raw(sc.ascii, sc.attr, row, col); // write a screenchar
 }
 
 pub struct Writer {
-    col_pos: u8, // the current column position on the screen
-    row_pos: u8, // the current row position on the screen
+    col_pos: u8, // the current column position in the buffer
+    row_pos: u8, // the current row position in the buffer
     def_attr: u8, // the default attribute byte for writing
-    buf_index: u8, // the current position of the screen in the data buffer
+    drawing: bool, // true if the system is allowed to write to the screen
+    screen_buf_pos: u8, // the current position of the start of the screen in the data buffer
     buffer: [[ScreenChar; SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize], // all data written to the screen, including what is not displayed
 }
+
+// TODO: rework system to write to the bottom of the buffer first, and push everything up
+
 
 impl Writer {
     pub fn new() -> Writer {
@@ -64,76 +70,154 @@ impl Writer {
             col_pos: 0,
             row_pos: 0,
             def_attr: color(Color::White, Color::Black),
-            buf_index: 0,
+            drawing: true,
+            screen_buf_pos: 0,
             buffer: [[ScreenChar::new(b' ', color(Color::White, Color::Black)); SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize],
         }
+    }
+
+    /// locks the system from drawing to the screen (NOT THE BUFFER)
+    pub fn lock_drawing(&mut self) {
+        self.drawing = false;
+    }
+
+    /// unlocks the system from drawing to the screen
+    pub fn unlock_drawing(&mut self) {
+        self.drawing = true;
+    }
+
+    /// Moves the screen up in the buffer
+    /// returns true if moved up successfully
+    pub fn move_screen_up(&mut self, amt: u8) -> bool {
+        if self.row_pos >= amt {
+            self.row_pos -= amt;
+            return true;
+        }
+        false
+    }
+
+    pub fn move_cursor_left(&mut self, amt: u8, wrap: bool) {
+        // if no wrapping is needed
+        if self.col_pos >= amt {
+            self.col_pos -= amt; // move the cursor position back
+            return; // nothing left to do
+        }
+
+        if !wrap { // if not wrapping, just move cursor to back of line and end
+            self.carriage_ret();
+            return;
+        }
+
+        // move the lines up by however many needed
+        self.move_screen_up(amt / SCREEN_WIDTH);
+
+        if self.col_pos >= amt % SCREEN_WIDTH {
+            self.col_pos -= amt % SCREEN_WIDTH; // move back as needed
+        } else {
+            let wrapped_amt = (amt % SCREEN_WIDTH) - self.col_pos; // calculate how much to move back on the previous line
+            if self.move_screen_up(1) {
+                self.col_pos = SCREEN_WIDTH - wrapped_amt; // move cursor to correct location if moved up a line properly
+            } else {
+                self.carriage_ret(); // otherwise go to the start of the line and end operations
+            }
+        }
+    }
+
+    pub fn move_cursor_right(&mut self, amt: u8, wrap: bool) {
+        self.col_pos += amt; // increase the column position
+
+        if self.col_pos > SCREEN_WIDTH { // requires a new line
+            if !wrap { // if not wrapping, move cursor to the end of the line and return
+                self.col_pos = SCREEN_WIDTH - 1;
+                return;
+            }
+
+            self.move_screen_down(self.col_pos / 80); // move the screen down as many times as asked
+            self.col_pos %= SCREEN_WIDTH; // set the remainder to the column position on the current line
+        }
+    }
+
+    /// Moves the screen down in the buffer
+    pub fn move_screen_down(&mut self, amt: u8) {
+        for _ in 0..amt { // move the screen down 'amt' times
+            if self.screen_buf_pos + self.row_pos >= DATA_BUFFER_SIZE - 1 {
+                // shift all lines up to make room for new lines at the end of the buffer
+                for x in 0..DATA_BUFFER_SIZE {
+                    if x != DATA_BUFFER_SIZE - 1 {
+                        self.buffer[x as usize] = self.buffer[(x + 1) as usize]; // set the value in buffer[x + 1] to buffer[x] to move everything up
+                    } else {
+                        self.buffer[x as usize] = [ScreenChar::new(b' ', self.def_attr); SCREEN_WIDTH as usize]; // clear last entry
+                    }
+                }
+                return;
+            }
+
+            // check the current pos on screen is not the end
+            if self.row_pos < self.screen_buf_pos + SCREEN_HEIGHT { // for when not moving position in buffer, only on screen
+                self.row_pos += 1;
+                return;
+            }
+
+            // check that the position of the screen is before the end of the buffer
+            if self.screen_buf_pos < DATA_BUFFER_SIZE - SCREEN_HEIGHT { // shifts the screen down by one and sets the row position accordingly
+                self.screen_buf_pos += 1;
+                self.row_pos += 1;
+            }
+        }
+    }
+
+    /// the carriage return '\r' returns the current position on the line to 0
+    pub fn carriage_ret(&mut self) {
+        self.col_pos = 0; // go back to the start of the current line
+    }
+
+    /// moves the current row position down by one
+    pub fn newline(&mut self) {
+        self.move_screen_down(1); // move the line down 1
+        self.carriage_ret(); // go to start of line
+        self.draw(); // draw the change
+    }
+
+    /// goes back a character and sets it to a space
+    pub fn backspace(&mut self) {
+        self.move_cursor_left(1, true);
+        self.write_string(" ");
+        self.move_cursor_left(1, true);
     }
 
     pub fn clear(&mut self) {
         self.buffer = [[ScreenChar::new(b' ', color(Color::White, Color::Black)); SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize];
         self.col_pos = 0;
+        self.set_color(b'f');
         self.row_pos = 0;
-        self.buf_index = 0;
+        self.screen_buf_pos = 0;
         self.draw();
     }
 
-    pub fn mov_u(&mut self) {
-        // TODO
-    }
-
-    pub fn mov_d(&mut self) {
-        if self.row_pos >= self.buf_index + 25 { // if at the bottom of the screen
-            if self.buf_index >= DATA_BUFFER_SIZE - 25 { // if at the end of the buffer
-                // shift all lines up by 1 index (overwriting index 0)
-                for x in 0..DATA_BUFFER_SIZE {
-                    if x != DATA_BUFFER_SIZE - 1 {
-                        self.buffer[x as usize] = self.buffer[(x + 1) as usize];
-                    }
-                }
-                // set the bottom line to an empty line
-                self.buffer[(DATA_BUFFER_SIZE - 1) as usize] = [ScreenChar::new(b' ', self.def_attr); SCREEN_WIDTH as usize];
-            } else {
-                self.buf_index += 1;
-            }
-        } else { // otherwise should just move the row down by one
-            self.row_pos += 1;
-        }
-    }
-
-    pub fn ret(&mut self) {
-        self.col_pos = 0;
-    }
-
-    pub fn newline(&mut self) {
-        self.ret();
-        self.mov_d();
-        self.draw();
-    }
-
-    pub fn backspace(&mut self) {
-        // TODO
-    }
-
+    /// Writes a byte to the buffer with a colored attribute byte following
     pub fn write_byte_colored(&mut self, byte: u8, color: u8) {
         match byte {
-            b'\n' => self.newline(),
-            b'\r' => self.ret(),
-            b'\x08' => self.backspace(),
-            byte => {
-                self.buffer[(self.row_pos) as usize][(self.col_pos as usize)] = ScreenChar {
-                    ascii: byte,
-                    attr: color
-                };
+            b'\n' => self.newline(), // newline
+            b'\r' => self.carriage_ret(), // return carriage
+            b'\x08' => self.backspace(), // backspace
+            byte => { // if the byte is a normal character, print it to the buffer
+                // set the correct location
+                self.buffer[self.row_pos as usize][self.col_pos as usize] = ScreenChar::new(byte, color);
 
-                self.col_pos += 1;
+                self.col_pos += 1; // increment the column position in the buffer (column = character in the line)
+                if self.col_pos >= 80 { // check if the current column position is at the end of the line
+                    self.newline(); // go to the next line
+                }
             }
         }
     }
 
+    /// Writes a byte to the buffer with the default color attribute of the writer
     pub fn write_byte(&mut self, byte: u8) {
-        self.write_byte_colored(byte, self.def_attr);
+        self.write_byte_colored(byte, self.def_attr); // write the byte with the current default color attribute
     }
 
+    /// Writes a character to the screen, but checks it to make sure its something that can be printed
     fn write_valid_byte(&mut self, byte: u8) {
         match byte {
             // match the non color code byte
@@ -144,70 +228,71 @@ impl Writer {
         }
     }
 
-    fn color_check(&mut self, x: usize, s: &str) -> bool {
-        s.bytes().nth(x).unwrap() == b'&'
-            && s.bytes().len() > x + 1
-            && ((s.bytes().nth(x + 1).unwrap() >= b'0' && s.bytes().nth(x + 1).unwrap() <= b'9')
-            || (s.bytes().nth(x + 1).unwrap() >= b'a' && s.bytes().nth(x + 1).unwrap() <= b'f'))
+    /// check if the current byte is a color attribute identifier
+    /// returns true if color is changed
+    fn set_color(&mut self, cbyte: u8) -> bool {
+        match cbyte {
+            b'0' => self.def_attr = color(Color::Black, Color::Black),
+            b'1' => self.def_attr = color(Color::Blue, Color::Black),
+            b'2' => self.def_attr = color(Color::Green, Color::Black),
+            b'3' => self.def_attr = color(Color::Cyan, Color::Black),
+            b'4' => self.def_attr = color(Color::Red, Color::Black),
+            b'5' => self.def_attr = color(Color::Magenta, Color::Black),
+            b'6' => self.def_attr = color(Color::Brown, Color::Black),
+            b'7' => self.def_attr = color(Color::LightGray, Color::Black),
+            b'8' => self.def_attr = color(Color::DarkGray, Color::Black),
+            b'9' => self.def_attr = color(Color::LightBlue, Color::Black),
+            b'a' => self.def_attr = color(Color::LightGreen, Color::Black),
+            b'b' => self.def_attr = color(Color::LightCyan, Color::Black),
+            b'c' => self.def_attr = color(Color::LightRed, Color::Black),
+            b'd' => self.def_attr = color(Color::Pink, Color::Black),
+            b'e' => self.def_attr = color(Color::Yellow, Color::Black),
+            b'f' => self.def_attr = color(Color::White, Color::Black),
+            _ => return false
+        }
+        true
     }
 
+    /// Writes a string literal to the buffer using write_byte(...)
     pub fn write_string(&mut self, s: &str) {
-        let mut colored = false;
-        for x in 0..s.bytes().len() {
-            let byte = s.bytes().nth(x).unwrap();
-            if colored {
-                match byte {
-                    // determine the color TODO: Custom Background colors?
-                    b'0' => self.def_attr = color(Color::Black, Color::Black),
-                    b'1' => self.def_attr = color(Color::Blue, Color::Black),
-                    b'2' => self.def_attr = color(Color::Green, Color::Black),
-                    b'3' => self.def_attr = color(Color::Cyan, Color::Black),
-                    b'4' => self.def_attr = color(Color::Red, Color::Black),
-                    b'5' => self.def_attr = color(Color::Magenta, Color::Black),
-                    b'6' => self.def_attr = color(Color::Brown, Color::Black),
-                    b'7' => self.def_attr = color(Color::LightGray, Color::Black),
-                    b'8' => self.def_attr = color(Color::DarkGray, Color::Black),
-                    b'9' => self.def_attr = color(Color::LightBlue, Color::Black),
-                    b'a' => self.def_attr = color(Color::LightGreen, Color::Black),
-                    b'b' => self.def_attr = color(Color::LightCyan, Color::Black),
-                    b'c' => self.def_attr = color(Color::LightRed, Color::Black),
-                    b'd' => self.def_attr = color(Color::Pink, Color::Black),
-                    b'e' => self.def_attr = color(Color::Yellow, Color::Black),
-                    b'f' => self.def_attr = color(Color::White, Color::Black),
-                    _ => {
-                        // if not a color code, just print the normal text
-                        self.write_byte(b'&'); // COLOR INDICATOR CHAR SET HERE!
-                        colored = self.color_check(x, s);
-                        if colored {
-                            continue;
-                        }
-                        self.write_valid_byte(byte);
-                        continue; // as to not set colored to false if needed
-                    }
+        let mut colored = false; // flag that next byte might be a color byte
+        for x in 0..s.bytes().len() { // loop through all the bytes in the string
+            let byte = s.bytes().nth(x).unwrap(); // get the raw value of the current byte
+            if colored { // if colored is flagged
+                if self.set_color(byte) { // changes the color if needed
+                    colored = false; // flip colored flag
+                    continue; // set color, nothing left to do this loop iteration
+                } else {
+                    colored = false; // unflag colored
+                    self.write_valid_byte(b'&'); // print out '&' as it wasnt a colored byte
                 }
-                colored = false;
-                continue; // Continue the loop as there is nothing else to do.
             }
-            colored = self.color_check(x, s);
-            if colored {
+
+            if byte == b'&' { // flag colored if needed
+                colored = true;
                 continue;
             }
-            self.write_valid_byte(byte);
+
+            self.write_valid_byte(byte); // output current byte
+
         }
         self.draw();
     }
 
-    pub fn draw(&mut self) { // TODO: THIS IS BROKEN. FIX.
-        for row in 0..SCREEN_HEIGHT {
-            let mut output_col = 0;
-            for col in 0..SCREEN_WIDTH {
+    /// Draws the portion of the buffer marked by screen_buf_pos to the screen
+    pub fn draw(&mut self) {
+        if !self.drawing {
+            return;
+        }
+        for row in 0..SCREEN_HEIGHT { // all the rows (lines) on the screen
+            for col in 0..SCREEN_WIDTH { // all the characters on the current line
+                let byte = self.buffer[(self.screen_buf_pos + row) as usize][col as usize];
                 unsafe {
-                    write(VGA_TEXTMODE_PTR, self.buffer[(row + self.buf_index) as usize][col as usize], row, output_col); // write the current char to the screen
+                    // Write the current screenchar to the screen
+                    vga_write(byte, row, col * 2);
+                    // get the current row position in the buffer ^         col * 2 to account for attribute bytes ^
                 }
-
-                output_col += 2;
             }
-
         }
     }
 }
@@ -232,6 +317,24 @@ macro_rules! print {
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! clear_vga {
+    () => ($crate::vga_textmode::_clear());
+}
+
+#[doc(hidden)]
+pub fn _clear() {
+    use x86_64::instructions::interrupts;
+
+    interrupts::without_interrupts(|| {
+        WRITER.lock().clear();
+    });
+}
+
+pub(crate) fn get_writer<'a>() -> &'a Mutex<Writer> {
+    &WRITER
 }
 
 #[doc(hidden)]

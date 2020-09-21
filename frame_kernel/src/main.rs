@@ -12,43 +12,15 @@ use bootloader::{BootInfo, entry_point};
 use x86_64::VirtAddr;
 
 use frame_kernel::{
-    print, println,
+    clear_vga, print, println, serial_println,
     task::{executor::Executor, Task},
 };
+use frame_kernel::kcommand::CommandExecutor;
 use frame_kernel::logger::Logger;
-use frame_kernel::write_channel::ChannelSTDERR;
-use frame_kernel::write_channel::ChannelSTDIN;
-use frame_kernel::write_channel::ChannelSTDOUT;
+use frame_kernel::task::keyboard;
+use frame_kernel::write_channel::stdout;
 
 // ================= FEATURE TEST FUNCTIONS
-
-async fn heap_test() {
-    // allocate a number on the heap
-    let heap_value = Box::new(42);
-    println!("&6heap_value at &e{:p}", heap_value);
-
-    // create a dynamically sized vector
-    let mut vec = Vec::new();
-    for i in 0..500 {
-        vec.push(i);
-    }
-    println!("&6vec at &e{:p}", vec.as_slice());
-    vec.push(501);
-    println!("&6vec at &e{:p}", vec.as_slice());
-
-    // create a reference counted vector -> will be freed when count reaches 0
-    let reference_counted = Rc::new(vec![1, 2, 3]);
-    let cloned_reference = reference_counted.clone();
-    println!(
-        "&6current reference count is &e{}",
-        Rc::strong_count(&cloned_reference)
-    );
-    core::mem::drop(reference_counted);
-    println!(
-        "&6reference count is &e{} &6now",
-        Rc::strong_count(&cloned_reference)
-    );
-}
 
 // define the entry point as kmain() instead of _start()
 entry_point!(kmain);
@@ -63,7 +35,7 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     use frame_kernel::memory::{self, BootInfoFrameAllocator};
 
     println!(
-        "&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)&7",
+        "&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)\n",
         VERSION
     );
     frame_kernel::init(); // initialize the interrupt handlers
@@ -79,23 +51,20 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("FrameOS Heap initialization failed.");
 
-    // Initialize output channels
-    let stdout = ChannelSTDOUT {};
-    let stdin = ChannelSTDIN {};
-    let stderr = ChannelSTDERR {};
-
     // ================= MAIN RUNTIME CODE
+
 
     let logger = Logger::new(&stdout);
 
-    for x in 0..200 {
-         logger.debug(&("Test Message: ".to_string() + &x.to_string()));
-    }
 
 
     let mut executor = Executor::new();
-    // executor.spawn(Task::new(heap_test()));
-    // executor.spawn(Task::new(keyboard::print_keypresses())); // enables keyboard input
+    executor.spawn(Task::new(keyboard::print_keypresses())); // enables keyboard input
+
+    let mut command_executor = CommandExecutor::new();
+    executor.spawn(Task::new(command_executor.run()));
+
+    // TODO: Process for getting incoming commands and sending them to the Command Executor
 
     executor.run();
 

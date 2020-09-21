@@ -24,6 +24,7 @@ pub mod logger;
 pub mod write_channel;
 pub mod vga_buffer_outdated;
 pub mod vga_textmode;
+pub mod kcommand;
 
 // ================= INITIALIZATION
 

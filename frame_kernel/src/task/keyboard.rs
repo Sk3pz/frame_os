@@ -1,15 +1,18 @@
-use crate::{print, println};
-use conquer_once::spin::OnceCell;
 use core::{
     pin::Pin,
     task::{Context, Poll},
 };
+
+use conquer_once::spin::OnceCell;
 use crossbeam_queue::ArrayQueue;
 use futures_util::{
     stream::{Stream, StreamExt},
     task::AtomicWaker,
 };
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use pc_keyboard::{DecodedKey, HandleControl, Keyboard, KeyCode, layouts, ScancodeSet1};
+
+use crate::{print, println};
+use crate::vga_textmode::get_writer;
 
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
@@ -75,7 +78,24 @@ pub async fn print_keypresses() {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
                     DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
+                    // TODO: Make sure only typed characters are editable
+                    DecodedKey::RawKey(key) => {
+                        match key {
+                            KeyCode::ArrowDown => {
+                                get_writer().lock().move_screen_down(1);
+                            }
+                            KeyCode::ArrowUp => {
+                                get_writer().lock().move_screen_up(1);
+                            }
+                            KeyCode::ArrowLeft => {
+                                get_writer().lock().move_cursor_left(1, true);
+                            }
+                            KeyCode::ArrowRight => {
+                                get_writer().lock().move_cursor_right(1, true);
+                            }
+                            key => print!("{:?}", key)
+                        }
+                    }
                 }
             }
         }
