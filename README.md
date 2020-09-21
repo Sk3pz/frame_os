@@ -37,9 +37,6 @@ Current Versions:
 ```
 
 ----------------
-Known bugs:
-
- - VGA Text mode input (in kernel) - Backspacing a newline breaks input (requires restart)
  
 In Process:
 
