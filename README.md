@@ -25,7 +25,7 @@ Current Versions:
 
 5a.) Inside of `\frame_kernel`, you can use `cargo run` or `cargo build`
 
-6b.) To run the kernel, use `build.bat` or `run.bat`
+5b.) To run the kernel, use `build.bat` or `run.bat`
 
 ```
 *** FUTURE PLANNED BUILDING AND RUNNING ***
