@@ -13,6 +13,8 @@ extern crate alloc;
 
 use core::panic::PanicInfo;
 
+use x86_64::instructions::port::Port;
+
 pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
@@ -25,6 +27,7 @@ pub mod write_channel;
 pub mod vga_buffer_outdated;
 pub mod vga_textmode;
 pub mod kcommand;
+// pub mod US104Keyboard;
 
 // ================= INITIALIZATION
 
@@ -63,6 +66,22 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
         let mut port = Port::new(0xf4);
         port.write(exit_code as u32);
     }
+}
+
+// ================= Port IO
+
+/// Unsafe due to call to Port.write(...)
+/// Unsafe due to writing to port
+pub unsafe fn outb(port: u16, data: u16) {
+    let mut p = Port::new(port);
+    p.write(data);
+}
+
+/// Unsafe due to call to Port.read(...)
+/// Unsafe due to writing to port
+pub unsafe fn inb(port: u16) -> u16 {
+    let mut p = Port::new(port);
+    p.read()
 }
 
 // ================= CUSTOM PANIC IMPLIMENTATION

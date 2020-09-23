@@ -11,7 +11,7 @@ use futures_util::{
 };
 use pc_keyboard::{DecodedKey, HandleControl, Keyboard, KeyCode, layouts, ScancodeSet1};
 
-use crate::{print, println};
+use crate::{clear_vga, print, println};
 use crate::vga_textmode::get_writer;
 
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
@@ -78,7 +78,6 @@ pub async fn print_keypresses() {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
                     DecodedKey::Unicode(character) => print!("{}", character),
-                    // TODO: Make sure only typed characters are editable
                     DecodedKey::RawKey(key) => {
                         match key {
                             KeyCode::ArrowDown => {

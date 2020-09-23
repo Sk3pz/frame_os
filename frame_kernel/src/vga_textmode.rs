@@ -6,6 +6,7 @@ use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+use crate::outb;
 use crate::vga_buffer_outdated::Color;
 
 fn color(fg: Color, bg: Color) -> u8 { // create an attribute byte from 2 colors
@@ -48,8 +49,20 @@ pub unsafe fn vga_write_raw(b: u8, attr: u8, row: u8, col: u8) {
 }
 
 /// Unsafe because of call to vga_write_raw(...)
+/// Unsafe because of call to set_vga_cursor_pos(...)
 pub unsafe fn vga_write(sc: ScreenChar, row: u8, col: u8) {
     vga_write_raw(sc.ascii, sc.attr, row, col); // write a screenchar
+}
+
+/// Unsafe due to calls to outb(...)
+/// Unsafe writing to port
+pub unsafe fn set_vga_cursor_pos(x: u8, y: u8) {
+    let pos: u16 = ((y as u16) * (SCREEN_WIDTH as u16) + (x as u16)) as u16;
+
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (pos & (0xFF as u16)) as u16);
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, ((pos >> 8) & 0xFF) as u16);
 }
 
 pub struct Writer {
@@ -91,6 +104,10 @@ impl Writer {
     pub fn move_screen_up(&mut self, amt: u8) -> bool {
         if self.row_pos >= amt {
             self.row_pos -= amt;
+            if self.screen_buf_pos > 0 && self.screen_buf_pos > self.row_pos {
+                self.screen_buf_pos -= 1;
+            }
+            self.draw();
             return true;
         }
         false
@@ -100,11 +117,13 @@ impl Writer {
         // if no wrapping is needed
         if self.col_pos >= amt {
             self.col_pos -= amt; // move the cursor position back
+            self.draw();
             return; // nothing left to do
         }
 
         if !wrap { // if not wrapping, just move cursor to back of line and end
             self.carriage_ret();
+            self.draw();
             return;
         }
 
@@ -121,6 +140,7 @@ impl Writer {
                 self.carriage_ret(); // otherwise go to the start of the line and end operations
             }
         }
+        self.draw();
     }
 
     pub fn move_cursor_right(&mut self, amt: u8, wrap: bool) {
@@ -129,12 +149,14 @@ impl Writer {
         if self.col_pos > SCREEN_WIDTH { // requires a new line
             if !wrap { // if not wrapping, move cursor to the end of the line and return
                 self.col_pos = SCREEN_WIDTH - 1;
+                self.draw();
                 return;
             }
 
             self.move_screen_down(self.col_pos / 80); // move the screen down as many times as asked
             self.col_pos %= SCREEN_WIDTH; // set the remainder to the column position on the current line
         }
+        self.draw();
     }
 
     /// Moves the screen down in the buffer
@@ -149,12 +171,14 @@ impl Writer {
                         self.buffer[x as usize] = [ScreenChar::new(b' ', self.def_attr); SCREEN_WIDTH as usize]; // clear last entry
                     }
                 }
+                self.draw();
                 return;
             }
 
             // check the current pos on screen is not the end
-            if self.row_pos < self.screen_buf_pos + SCREEN_HEIGHT { // for when not moving position in buffer, only on screen
+            if self.row_pos < self.screen_buf_pos + (SCREEN_HEIGHT - 1) { // for when not moving position in buffer, only on screen
                 self.row_pos += 1;
+                self.draw();
                 return;
             }
 
@@ -162,6 +186,7 @@ impl Writer {
             if self.screen_buf_pos < DATA_BUFFER_SIZE - SCREEN_HEIGHT { // shifts the screen down by one and sets the row position accordingly
                 self.screen_buf_pos += 1;
                 self.row_pos += 1;
+                self.draw();
             }
         }
     }
@@ -293,6 +318,13 @@ impl Writer {
                     // get the current row position in the buffer ^         col * 2 to account for attribute bytes ^
                 }
             }
+        }
+        unsafe {
+            let mut r = self.row_pos - self.screen_buf_pos;
+            if r > 25 {
+                r = 24;
+            }
+            set_vga_cursor_pos(self.col_pos, r);
         }
     }
 }

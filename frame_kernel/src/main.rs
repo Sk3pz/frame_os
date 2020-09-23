@@ -1,3 +1,4 @@
+#![feature(asm)]
 // main.rs - Entry point for FrameOS
 #![no_std]
 #![no_main]
@@ -19,8 +20,6 @@ use frame_kernel::kcommand::CommandExecutor;
 use frame_kernel::logger::Logger;
 use frame_kernel::task::keyboard;
 use frame_kernel::write_channel::stdout;
-
-// ================= FEATURE TEST FUNCTIONS
 
 // define the entry point as kmain() instead of _start()
 entry_point!(kmain);
@@ -59,12 +58,8 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
 
 
     let mut executor = Executor::new();
+
     executor.spawn(Task::new(keyboard::print_keypresses())); // enables keyboard input
-
-    let mut command_executor = CommandExecutor::new();
-    executor.spawn(Task::new(command_executor.run()));
-
-    // TODO: Process for getting incoming commands and sending them to the Command Executor
 
     executor.run();
 
