@@ -1,4 +1,3 @@
-#![feature(asm)]
 // main.rs - Entry point for FrameOS
 #![no_std]
 #![no_main]
