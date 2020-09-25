@@ -76,7 +76,6 @@ pub struct Writer {
 
 // TODO: rework system to write to the bottom of the buffer first, and push everything up
 
-
 impl Writer {
     pub fn new() -> Writer {
         Writer {
@@ -101,9 +100,9 @@ impl Writer {
 
     /// Moves the screen up in the buffer
     /// returns true if moved up successfully
-    pub fn move_screen_up(&mut self, amt: u8) -> bool {
-        if self.row_pos >= amt {
-            self.row_pos -= amt;
+    pub fn move_screen_up(&mut self) -> bool {
+        if self.row_pos >= 1 {
+            self.row_pos -= 1;
             if self.screen_buf_pos > 0 && self.screen_buf_pos > self.row_pos {
                 self.screen_buf_pos -= 1;
             }
@@ -113,38 +112,27 @@ impl Writer {
         false
     }
 
-    pub fn move_cursor_left(&mut self, amt: u8, wrap: bool) {
+    pub fn move_cursor_left(&mut self, wrap: bool) {
         // if no wrapping is needed
-        if self.col_pos >= amt {
-            self.col_pos -= amt; // move the cursor position back
+        if self.col_pos >= 1 {
+            self.col_pos -= 1; // move the cursor position back
             self.draw();
             return; // nothing left to do
         }
 
         if !wrap { // if not wrapping, just move cursor to back of line and end
-            self.carriage_ret();
+            self.col_pos = 0;
             self.draw();
             return;
-        }
-
-        // move the lines up by however many needed
-        self.move_screen_up(amt / SCREEN_WIDTH);
-
-        if self.col_pos >= amt % SCREEN_WIDTH {
-            self.col_pos -= amt % SCREEN_WIDTH; // move back as needed
         } else {
-            let wrapped_amt = (amt % SCREEN_WIDTH) - self.col_pos; // calculate how much to move back on the previous line
-            if self.move_screen_up(1) {
-                self.col_pos = SCREEN_WIDTH - wrapped_amt; // move cursor to correct location if moved up a line properly
-            } else {
-                self.carriage_ret(); // otherwise go to the start of the line and end operations
-            }
+            self.move_screen_up();
         }
+
         self.draw();
     }
 
-    pub fn move_cursor_right(&mut self, amt: u8, wrap: bool) {
-        self.col_pos += amt; // increase the column position
+    pub fn move_cursor_right(&mut self, wrap: bool) {
+        self.col_pos += 1; // increase the column position
 
         if self.col_pos > SCREEN_WIDTH { // requires a new line
             if !wrap { // if not wrapping, move cursor to the end of the line and return
@@ -153,41 +141,39 @@ impl Writer {
                 return;
             }
 
-            self.move_screen_down(self.col_pos / 80); // move the screen down as many times as asked
-            self.col_pos %= SCREEN_WIDTH; // set the remainder to the column position on the current line
+            self.move_screen_down(); // move the screen down as many times as asked
+            self.col_pos = 0; // set the remainder to the column position on the current line
         }
         self.draw();
     }
 
     /// Moves the screen down in the buffer
-    pub fn move_screen_down(&mut self, amt: u8) {
-        for _ in 0..amt { // move the screen down 'amt' times
-            if self.screen_buf_pos + self.row_pos >= DATA_BUFFER_SIZE - 1 {
-                // shift all lines up to make room for new lines at the end of the buffer
-                for x in 0..DATA_BUFFER_SIZE {
-                    if x != DATA_BUFFER_SIZE - 1 {
-                        self.buffer[x as usize] = self.buffer[(x + 1) as usize]; // set the value in buffer[x + 1] to buffer[x] to move everything up
-                    } else {
-                        self.buffer[x as usize] = [ScreenChar::new(b' ', self.def_attr); SCREEN_WIDTH as usize]; // clear last entry
-                    }
+    pub fn move_screen_down(&mut self) {
+        if self.screen_buf_pos + self.row_pos >= DATA_BUFFER_SIZE - 1 {
+            // shift all lines up to make room for new lines at the end of the buffer
+            for x in 0..DATA_BUFFER_SIZE {
+                if x != DATA_BUFFER_SIZE - 1 {
+                    self.buffer[x as usize] = self.buffer[(x + 1) as usize]; // set the value in buffer[x + 1] to buffer[x] to move everything up
+                } else {
+                    self.buffer[x as usize] = [ScreenChar::new(b' ', self.def_attr); SCREEN_WIDTH as usize]; // clear last entry
                 }
-                self.draw();
-                return;
             }
+            self.draw();
+            return;
+        }
 
-            // check the current pos on screen is not the end
-            if self.row_pos < self.screen_buf_pos + (SCREEN_HEIGHT - 1) { // for when not moving position in buffer, only on screen
-                self.row_pos += 1;
-                self.draw();
-                return;
-            }
+        // check the current pos on screen is not the end
+        if self.row_pos < self.screen_buf_pos + (SCREEN_HEIGHT - 1) { // for when not moving position in buffer, only on screen
+            self.row_pos += 1;
+            self.draw();
+            return;
+        }
 
-            // check that the position of the screen is before the end of the buffer
-            if self.screen_buf_pos < DATA_BUFFER_SIZE - SCREEN_HEIGHT { // shifts the screen down by one and sets the row position accordingly
-                self.screen_buf_pos += 1;
-                self.row_pos += 1;
-                self.draw();
-            }
+        // check that the position of the screen is before the end of the buffer
+        if self.screen_buf_pos < DATA_BUFFER_SIZE - SCREEN_HEIGHT { // shifts the screen down by one and sets the row position accordingly
+            self.screen_buf_pos += 1;
+            self.row_pos += 1;
+            self.draw();
         }
     }
 
@@ -198,16 +184,16 @@ impl Writer {
 
     /// moves the current row position down by one
     pub fn newline(&mut self) {
-        self.move_screen_down(1); // move the line down 1
+        self.move_screen_down(); // move the line down 1
         self.carriage_ret(); // go to start of line
         self.draw(); // draw the change
     }
 
     /// goes back a character and sets it to a space
     pub fn backspace(&mut self) {
-        self.move_cursor_left(1, true);
+        self.move_cursor_left(true);
         self.write_string(" ");
-        self.move_cursor_left(1, true);
+        self.move_cursor_left(true);
     }
 
     pub fn clear(&mut self) {

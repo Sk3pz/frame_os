@@ -81,16 +81,16 @@ pub async fn print_keypresses() {
                     DecodedKey::RawKey(key) => {
                         match key {
                             KeyCode::ArrowDown => {
-                                get_writer().lock().move_screen_down(1);
+                                get_writer().lock().move_screen_down();
                             }
                             KeyCode::ArrowUp => {
-                                get_writer().lock().move_screen_up(1);
+                                get_writer().lock().move_screen_up();
                             }
                             KeyCode::ArrowLeft => {
-                                get_writer().lock().move_cursor_left(1, true);
+                                get_writer().lock().move_cursor_left(true);
                             }
                             KeyCode::ArrowRight => {
-                                get_writer().lock().move_cursor_right(1, true);
+                                get_writer().lock().move_cursor_right(true);
                             }
                             key => print!("{:?}", key)
                         }

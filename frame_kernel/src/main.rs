@@ -15,7 +15,6 @@ use frame_kernel::{
     clear_vga, print, println, serial_println,
     task::{executor::Executor, Task},
 };
-use frame_kernel::kcommand::CommandExecutor;
 use frame_kernel::logger::Logger;
 use frame_kernel::task::keyboard;
 use frame_kernel::write_channel::stdout;
@@ -51,14 +50,15 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
 
     // ================= MAIN RUNTIME CODE
 
-
     let logger = Logger::new(&stdout);
-
-
 
     let mut executor = Executor::new();
 
     executor.spawn(Task::new(keyboard::print_keypresses())); // enables keyboard input
+
+    // for x in 0..999 {
+    //     logger.info(&("X: ".to_string() + &x.to_string()));
+    // }
 
     executor.run();
 
