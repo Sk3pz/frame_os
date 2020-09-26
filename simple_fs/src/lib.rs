@@ -1,19 +1,16 @@
-
 pub struct Folder {
-    path: String
+    path: String,
 }
 
 impl Folder {
-    pub fn new() -> Folder {
-
-    }
+    pub fn new() -> Folder {}
     pub fn clone(&self) -> Folder {
         Folder {
-            path: self.path.clone()
+            path: self.path.clone(),
         }
     }
     pub fn mkdir(&self) { // TODO: return error codes if fails or panic idk
-        // TODO: Implement
+                          // TODO: Implement
     }
     pub fn exists(&self) -> bool {
         true // TODO: Implement
@@ -21,15 +18,17 @@ impl Folder {
 }
 
 pub struct File {
-    path: Folder, // path without the file name
-    name: String, // name of the file
-    full_path: String // path + name
+    path: Folder,
+    // path without the file name
+    name: String,
+    // name of the file
+    full_path: String, // path + name
 }
 
 impl File {
     pub fn new(name: &str, loc: Folder) -> File {
-
-        if !loc.exists() { // ensure the folder exists (if not we are creating)
+        if !loc.exists() {
+            // ensure the folder exists (if not we are creating)
             loc.mkdir();
         }
 
@@ -37,7 +36,7 @@ impl File {
         let f = File {
             path: loc,
             name: name.to_string(),
-            full_path: full
+            full_path: full,
         };
 
         if !f.exists() {
@@ -48,16 +47,18 @@ impl File {
     }
 
     pub fn create(&self) { // TODO: return error codes if fails or panic idk
-        // TODO: Implement
+                           // TODO: Implement
     }
 
     pub fn exists(&self) -> bool {
         true // TODO: Implement
     }
-
 }
 
-
+#[no_mangle]
+pub extern "C" fn get_number() -> isize {
+    42 as isize
+}
 
 #[cfg(test)]
 mod tests {

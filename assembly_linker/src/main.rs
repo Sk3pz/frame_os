@@ -1,5 +1,8 @@
+#![feature(seek_convenience)]
+
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::SeekFrom::Start;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::process::{Command, Output};
 
 #[derive(Clone, Copy)]
@@ -11,7 +14,7 @@ struct CHS {
 
 impl CHS {
     fn calculate_sector_total(start_chs: CHS, end_chs: CHS) -> u32 {
-        let mut result: u32 = 0;
+        let mut result: u32 = 1;
         let mut current_chs = CHS {
             cylinder: start_chs.cylinder,
             head: start_chs.head,
@@ -31,7 +34,7 @@ impl CHS {
         if self.cylinder == other.cylinder {
             if self.head == other.head {
                 if self.sector == other.sector {
-                    0_u32
+                    1_u32
                 } else if self.sector > other.sector {
                     CHS::calculate_sector_total(other, *self)
                 } else {
@@ -49,13 +52,13 @@ impl CHS {
         }
     }
 
-    fn as_lba(&self) -> u32 {
+    fn to_lba(&self) -> u32 {
         let start_chs = CHS {
             cylinder: 0,
             head: 0,
             sector: 1,
         };
-        self.calculate_sector_distance(start_chs)
+        self.calculate_sector_distance(start_chs) - 1
     }
 
     fn increment(&mut self) {
@@ -118,13 +121,13 @@ impl Partition {
         if self.status == 0x00 {
             return 0x00;
         }
-        self.start_chs.calculate_sector_distance(self.end_chs) + 1_u32
+        self.start_chs.calculate_sector_distance(self.end_chs)
     }
     fn start_lba(&self) -> u32 {
         if self.status == 0x00 {
             return 0x00;
         }
-        self.start_chs.as_lba()
+        self.start_chs.to_lba()
     }
 
     fn print_record(&self) {
@@ -194,6 +197,20 @@ impl Partition {
             part
         }
     }
+
+    fn write(&self, offset: u64, data: &[u8], file: &mut File) -> bool {
+        let original = file.stream_position().unwrap();
+        let location = offset + (u64::from(self.start_chs.to_lba()) * 512_u64);
+        let max = (u64::from(self.end_chs.to_lba()) * 512_u64) - offset;
+        if data.len() as u64 > max {
+            println!("Data too big: {} Max allowed: {}", data.len(), max);
+            return false;
+        }
+        file.seek(Start(location)).unwrap();
+        file.write_all(data).unwrap();
+        file.seek(Start(original)).unwrap();
+        return true;
+    }
 }
 
 struct MBR {
@@ -208,6 +225,26 @@ struct MBR {
 }
 
 impl MBR {
+    fn calculate_blank(&mut self) {
+        if self.partition_1.status != 0x00 {
+            let start = CHS {
+                cylinder: 0,
+                head: 0,
+                sector: 2,
+            };
+            let mut end = CHS {
+                cylinder: self.partition_1.start_chs.cylinder,
+                head: self.partition_1.start_chs.head,
+                sector: self.partition_1.start_chs.sector,
+            };
+            end.decrement();
+            self.blank_space.start_chs = start;
+            self.blank_space.end_chs = end;
+            self.blank_space.status = 0x80;
+            self.blank_space.p_type = 0x7F;
+        }
+    }
+
     fn print(&self) {
         println!("Copy_Protected: {}", self.copy_protected);
         if self.partition_1.status == 0x00 {
@@ -314,18 +351,7 @@ impl MBR {
                 },
             },
         };
-        if mbr.partition_1.status != 0x00 {
-            let start = CHS {
-                cylinder: 0,
-                head: 0,
-                sector: 2,
-            };
-            let end = CHS {
-                cylinder: mbr.partition_1.start_chs.cylinder,
-                head: mbr.partition_1.start_chs.head,
-                sector: mbr.partition_1.start_chs.sector,
-            };
-        }
+        mbr.calculate_blank();
         mbr
     }
 }
@@ -451,11 +477,6 @@ fn sectors_to_bytes(sectors: u32) {
 }
 
 fn build_mbr(is_windows: bool) -> bool {
-    let sector = CHS::from_lba(0);
-    println!(
-        "LBA to Sector: H: {} S: {} C: {}",
-        sector.head, sector.sector, sector.cylinder
-    );
     let disk_path = std::path::Path::new("hdd.img");
     let bootloader = std::path::Path::new("boot.bin");
     let bootloader2 = std::path::Path::new("boot2.bin"); //todo
@@ -548,8 +569,21 @@ fn build_mbr(is_windows: bool) -> bool {
     for i in 0..440 {
         mbr.bootstrap[i] = buffer.remove(0);
     }
+    mbr.calculate_blank();
     mbr.write(&mut file);
-    mbr.print();
+    let mut buffs: Vec<u8> = vec![];
+    let mut bootable2 = File::open(bootloader2).unwrap();
+    bootable2.read_to_end(buffs.as_mut()).unwrap();
+
+    println!(
+        "Blank Space in bytes: {}",
+        mbr.blank_space.total_sectors() * 512
+    );
+    println!(
+        "P1 Space in bytes: {}",
+        mbr.partition_1.total_sectors() * 512
+    );
+    mbr.blank_space.write(0, buffs.as_mut_slice(), &mut file);
     return true;
 }
 
