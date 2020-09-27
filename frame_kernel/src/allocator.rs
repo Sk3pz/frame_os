@@ -9,6 +9,7 @@ use x86_64::{
     VirtAddr,
 };
 
+use crate::{HEAP_SIZE, HEAP_START};
 //use fixed_size_block::FixedSizeBlockAllocator;
 use crate::allocator::linked_list::LinkedListAllocator;
 
@@ -16,10 +17,7 @@ pub mod bump;
 pub mod fixed_size_block;
 pub mod linked_list;
 
-pub const HEAP_START: usize = 0x_4444_4444_0000;
-pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
-
-/// linked_list: Most efficient, slower
+/// linked_list: Most efficient, slower <== SHOULD ALWAYS BE USED!
 /// bump - really bad allocator
 /// fixed_size_block - fast, inefficient
 #[global_allocator]
