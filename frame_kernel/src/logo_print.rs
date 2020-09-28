@@ -29,7 +29,7 @@ const color_map: [[u8; 24]; 20] = [
     [0; 24]
 ];
 
-pub fn print_logo() { // extremely inefficient
+pub fn print_logo() { // extremely inefficient because of double for loops with print!() in each, as well as expensive color change calls
     for row in 0..20 {
         for col in 0..24 {
             match color_map[row][col] {
@@ -40,6 +40,7 @@ pub fn print_logo() { // extremely inefficient
             }
 
             print!("▮");
+            //print!(" ");
         }
         println!();
     }

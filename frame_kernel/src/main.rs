@@ -35,7 +35,7 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     println!("&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)\n", VERSION);
     println!();
     print_logo();
-
+    print!("&7%0");
     frame_kernel::init(); // initialize the interrupt handlers
 
     // the physical memory offset
