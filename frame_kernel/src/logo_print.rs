@@ -6,9 +6,7 @@ use crate::write_channel::WriteChannel;
 // 0 =   black
 // 1 = # aqua
 // 2 = % cyan
-const color_map: [[u8; 24]; 20] = [
-    [0; 24], // blank
-    [0; 24], // blank
+const color_map: [[u8; 24]; 16] = [
     [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,0,0],  //   ###################%
     [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,0],  //  #####################%
     [0,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,0],  //  ##%                ##%
@@ -25,12 +23,10 @@ const color_map: [[u8; 24]; 20] = [
     [0,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,0],  //  ##%                ##%
     [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,0],  //  #####################%
     [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,0,0],  //   ###################%
-    [0; 24],
-    [0; 24]
 ];
 
 pub fn print_logo() { // extremely inefficient because of double for loops with print!() in each, as well as expensive color change calls
-    for row in 0..20 {
+    for row in 0..16 {
         for col in 0..24 {
             match color_map[row][col] {
                 0 => print!("&0"),
@@ -39,7 +35,7 @@ pub fn print_logo() { // extremely inefficient because of double for loops with 
                 _ => print!("&0")
             }
 
-            print!("▮");
+            print!("{}", 0xfe as char);
             //print!(" ");
         }
         println!();

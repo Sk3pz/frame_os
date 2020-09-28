@@ -259,7 +259,7 @@ impl Writer {
         match byte {
             // match the non color code byte
             // printable ASCII byte or newline
-            0x20..=0x7e | b'\n' | b'\r' | b'\x08' => self.write_byte(byte),
+            0x20..=0x7e | b'\n' | b'\r' | b'\x08' | 0xfe => self.write_byte(byte),
             // not part of printable ASCII range
             _ => self.write_byte(0xfe),
         }
