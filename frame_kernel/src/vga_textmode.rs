@@ -7,7 +7,29 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::outb;
-use crate::vga_buffer_outdated::Color;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Color {
+    // create color variables for readability (even though I have the color ids memorized...)
+    Black = 0,
+    Blue = 1,
+    Green = 2,
+    Cyan = 3,
+    Red = 4,
+    Magenta = 5,
+    Brown = 6,
+    LightGray = 7,
+    Gray = 8,
+    LightBlue = 9,
+    LightGreen = 10, // a
+    LightCyan = 11,  // b
+    LightRed = 12,   // c
+    Pink = 13,       // d
+    Yellow = 14,     // e
+    White = 15,      // f
+}
 
 fn color(fg: Color, bg: Color) -> u8 { // create an attribute byte from 2 colors
     ((bg as u8) << 4 | (fg as u8))
@@ -69,6 +91,8 @@ pub struct Writer {
     col_pos: u8, // the current column position in the buffer
     row_pos: u8, // the current row position in the buffer
     def_attr: u8, // the default attribute byte for writing
+    current_fg: Color,
+    current_bg: Color,
     drawing: bool, // true if the system is allowed to write to the screen
     screen_buf_pos: u8, // the current position of the start of the screen in the data buffer
     buffer: [[ScreenChar; SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize], // all data written to the screen, including what is not displayed
@@ -82,6 +106,8 @@ impl Writer {
             col_pos: 0,
             row_pos: 0,
             def_attr: color(Color::White, Color::Black),
+            current_fg: Color::White,
+            current_bg: Color::Black,
             drawing: true,
             screen_buf_pos: 0,
             buffer: [[ScreenChar::new(b' ', color(Color::White, Color::Black)); SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize],
@@ -199,7 +225,7 @@ impl Writer {
     pub fn clear(&mut self) {
         self.buffer = [[ScreenChar::new(b' ', color(Color::White, Color::Black)); SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize];
         self.col_pos = 0;
-        self.set_color(b'f');
+        self.set_fg_color(b'f');
         self.row_pos = 0;
         self.screen_buf_pos = 0;
         self.draw();
@@ -239,26 +265,147 @@ impl Writer {
         }
     }
 
-    /// check if the current byte is a color attribute identifier
+    /// check if the current byte is a color attribute identifier (foreground)
     /// returns true if color is changed
-    fn set_color(&mut self, cbyte: u8) -> bool {
+    fn set_fg_color(&mut self, cbyte: u8) -> bool {
         match cbyte {
-            b'0' => self.def_attr = color(Color::Black, Color::Black),
-            b'1' => self.def_attr = color(Color::Blue, Color::Black),
-            b'2' => self.def_attr = color(Color::Green, Color::Black),
-            b'3' => self.def_attr = color(Color::Cyan, Color::Black),
-            b'4' => self.def_attr = color(Color::Red, Color::Black),
-            b'5' => self.def_attr = color(Color::Magenta, Color::Black),
-            b'6' => self.def_attr = color(Color::Brown, Color::Black),
-            b'7' => self.def_attr = color(Color::LightGray, Color::Black),
-            b'8' => self.def_attr = color(Color::DarkGray, Color::Black),
-            b'9' => self.def_attr = color(Color::LightBlue, Color::Black),
-            b'a' => self.def_attr = color(Color::LightGreen, Color::Black),
-            b'b' => self.def_attr = color(Color::LightCyan, Color::Black),
-            b'c' => self.def_attr = color(Color::LightRed, Color::Black),
-            b'd' => self.def_attr = color(Color::Pink, Color::Black),
-            b'e' => self.def_attr = color(Color::Yellow, Color::Black),
-            b'f' => self.def_attr = color(Color::White, Color::Black),
+            b'0' => {
+                self.def_attr = color(Color::Black, self.current_bg);
+                self.current_fg = Color::Black;
+            }
+            b'1' => {
+                self.def_attr = color(Color::Blue, self.current_bg);
+                self.current_fg = Color::Blue;
+            }
+            b'2' => {
+                self.def_attr = color(Color::Green, self.current_bg);
+                self.current_fg = Color::Green;
+            }
+            b'3' => {
+                self.def_attr = color(Color::Cyan, self.current_bg);
+                self.current_fg = Color::Cyan;
+            }
+            b'4' => {
+                self.def_attr = color(Color::Red, self.current_bg);
+                self.current_fg = Color::Red;
+            }
+            b'5' => {
+                self.def_attr = color(Color::Magenta, self.current_bg);
+                self.current_fg = Color::Magenta;
+            }
+            b'6' => {
+                self.def_attr = color(Color::Brown, self.current_bg);
+                self.current_fg = Color::Brown;
+            }
+            b'7' => {
+                self.def_attr = color(Color::LightGray, self.current_bg);
+                self.current_fg = Color::LightGray;
+            }
+            b'8' => {
+                self.def_attr = color(Color::Gray, self.current_bg);
+                self.current_fg = Color::Gray;
+            }
+            b'9' => {
+                self.def_attr = color(Color::LightBlue, self.current_bg);
+                self.current_fg = Color::LightBlue;
+            }
+            b'a' => {
+                self.def_attr = color(Color::LightGreen, self.current_bg);
+                self.current_fg = Color::LightGreen;
+            }
+            b'b' => {
+                self.def_attr = color(Color::LightCyan, self.current_bg);
+                self.current_fg = Color::LightCyan;
+            }
+            b'c' => {
+                self.def_attr = color(Color::LightRed, self.current_bg);
+                self.current_fg = Color::LightRed;
+            }
+            b'd' => {
+                self.def_attr = color(Color::Pink, self.current_bg);
+                self.current_fg = Color::Pink;
+            }
+            b'e' => {
+                self.def_attr = color(Color::Yellow, self.current_bg);
+                self.current_fg = Color::Yellow;
+            }
+            b'f' => {
+                self.def_attr = color(Color::White, self.current_bg);
+                self.current_fg = Color::White;
+            }
+            _ => return false
+        }
+        true
+    }
+
+    /// check if the current byte is a color attribute identifier (background)
+    /// returns true if color is changed
+    fn set_bg_color(&mut self, cbyte: u8) -> bool {
+        match cbyte {
+            b'0' => {
+                self.def_attr = color(self.current_fg, Color::Black);
+                self.current_bg = Color::Black;
+            }
+            b'1' => {
+                self.def_attr = color(self.current_fg, Color::Blue);
+                self.current_bg = Color::Blue;
+            }
+            b'2' => {
+                self.def_attr = color(self.current_fg, Color::Green);
+                self.current_bg = Color::Green;
+            }
+            b'3' => {
+                self.def_attr = color(self.current_fg, Color::Cyan);
+                self.current_bg = Color::Cyan;
+            }
+            b'4' => {
+                self.def_attr = color(self.current_fg, Color::Red);
+                self.current_bg = Color::Red;
+            }
+            b'5' => {
+                self.def_attr = color(self.current_fg, Color::Magenta);
+                self.current_bg = Color::Magenta;
+            }
+            b'6' => {
+                self.def_attr = color(self.current_fg, Color::Brown);
+                self.current_bg = Color::Brown;
+            }
+            b'7' => {
+                self.def_attr = color(self.current_fg, Color::LightGray);
+                self.current_bg = Color::LightGray;
+            }
+            b'8' => {
+                self.def_attr = color(self.current_fg, Color::Gray);
+                self.current_bg = Color::Gray;
+            }
+            b'9' => {
+                self.def_attr = color(self.current_fg, Color::LightBlue);
+                self.current_bg = Color::LightBlue;
+            }
+            b'a' => {
+                self.def_attr = color(self.current_fg, Color::LightGreen);
+                self.current_bg = Color::LightGreen;
+            }
+            b'b' => {
+                self.def_attr = color(self.current_fg, Color::LightCyan);
+                self.current_bg = Color::LightCyan;
+            }
+            b'c' => {
+                self.def_attr = color(self.current_fg, Color::LightRed);
+                self.current_bg = Color::LightRed;
+            }
+            b'd' => {
+                self.def_attr = color(self.current_fg, Color::Pink);
+                self.current_bg = Color::Pink;
+            }
+            b'e' => {
+                self.def_attr = color(self.current_fg, Color::Yellow);
+                self.current_bg = Color::Yellow;
+            }
+            b'f' => {
+                self.def_attr = color(self.current_fg, Color::White);
+                self.current_bg = Color::White;
+            }
             _ => return false
         }
         true
@@ -266,21 +413,35 @@ impl Writer {
 
     /// Writes a string literal to the buffer using write_byte(...)
     pub fn write_string(&mut self, s: &str) {
-        let mut colored = false; // flag that next byte might be a color byte
+        let mut colored_fg = false; // flag the next byte might be a fg color byte
+        let mut colored_bg = false; // flag the next byte might be a bg color byte
         for x in 0..s.bytes().len() { // loop through all the bytes in the string
             let byte = s.bytes().nth(x).unwrap(); // get the raw value of the current byte
-            if colored { // if colored is flagged
-                if self.set_color(byte) { // changes the color if needed
-                    colored = false; // flip colored flag
+            if colored_fg { // if colored fg is flagged
+                if self.set_fg_color(byte) { // changes the color if needed
+                    colored_fg = false; // flip colored flag
                     continue; // set color, nothing left to do this loop iteration
                 } else {
-                    colored = false; // unflag colored
+                    colored_fg = false; // unflag colored
                     self.write_valid_byte(b'&'); // print out '&' as it wasnt a colored byte
+                }
+            }
+            if colored_bg {
+                if self.set_bg_color(byte) {
+                    colored_bg = false;
+                    continue;
+                } else {
+                    colored_bg = false;
+                    self.write_valid_byte(b'%');
                 }
             }
 
             if byte == b'&' { // flag colored if needed
-                colored = true;
+                colored_fg = true;
+                continue;
+            }
+            if byte == b'%' {
+                colored_bg = true;
                 continue;
             }
 

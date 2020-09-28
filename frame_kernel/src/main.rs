@@ -16,6 +16,7 @@ use frame_kernel::{
     task::{executor::Executor, Task},
 };
 use frame_kernel::logger::Logger;
+use frame_kernel::logo_print::print_logo;
 use frame_kernel::task::keyboard;
 use frame_kernel::write_channel::stdout;
 
@@ -31,10 +32,10 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     use frame_kernel::allocator;
     use frame_kernel::memory::{self, BootInfoFrameAllocator};
 
-    println!(
-        "&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)\n",
-        VERSION
-    );
+    println!("&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)\n", VERSION);
+    println!();
+    print_logo();
+
     frame_kernel::init(); // initialize the interrupt handlers
 
     // the physical memory offset
