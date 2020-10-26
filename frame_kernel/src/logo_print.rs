@@ -1,6 +1,7 @@
 use alloc::string::{String, ToString};
 
 use crate::{print, println};
+use crate::vga_textmode::{ScreenChar, vga_write};
 use crate::write_channel::WriteChannel;
 
 // 0 =   black
@@ -27,7 +28,8 @@ const color_map: [[u8; 24]; 16] = [
 
 pub fn print_logo() { // extremely inefficient because of double for loops with print!() in each, as well as expensive color change calls
     for row in 0..16 {
-        for col in 0..24 {
+        for col in 5..29 {
+
             match color_map[row][col] {
                 0 => print!("&0"),
                 1 => print!("&b"),

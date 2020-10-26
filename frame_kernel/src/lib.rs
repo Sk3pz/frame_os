@@ -27,6 +27,8 @@ pub mod write_channel;
 pub mod vga_textmode;
 pub mod syscalls;
 pub mod logo_print;
+pub mod ram_file;
+pub mod command;
 
 // ================= HEAP ALLOCATION
 

@@ -32,15 +32,16 @@ pub enum Color {
 }
 
 fn color(fg: Color, bg: Color) -> u8 { // create an attribute byte from 2 colors
-    ((bg as u8) << 4 | (fg as u8))
+    ((bg as u8) << 4 | (fg as u8)) // shift the bits together into a form of 0x(bg)(fg)
 }
 
 const SCREEN_HEIGHT: u8 = 25;
 const SCREEN_WIDTH: u8 = 80;
 
-const DATA_BUFFER_SIZE: u8 = 124;
+const DATA_BUFFER_SIZE: u8 = 255;
 
-const VGA_TEXTMODE_PTR: *mut u8 = 0xb8000 as *mut u8;
+const VGA_TEXTMODE_PTR: *mut u8 = 0xb8000 as *mut u8; // a pointer to VGA TextMode Memory
+// (mut for writing to it)
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScreenChar {
@@ -59,12 +60,14 @@ impl ScreenChar {
 }
 
 /// Unsafe because the user must call a valid location and use of pointer offsets and writing
-pub unsafe fn vga_write_byte(byte: u8, row: u8, col: u8) { // TODO: THIS IS BROKEN. FIX.
-    VGA_TEXTMODE_PTR.offset((((row as isize) * ((SCREEN_WIDTH * 2) as isize)) + ((col) as isize)) as isize).write(byte); // write to the correct position
+pub unsafe fn vga_write_byte(byte: u8, row: u8, col: u8) {
+    VGA_TEXTMODE_PTR.offset((((row as isize) * ((SCREEN_WIDTH * 2) as isize)) +
+        ((col) as isize)) as isize).write(byte); // write to the correct position
     // multiplies row by width because thats how many characters are in a row
 }
 
-/// Unsafe because the user must call a valid location and use of unsafe function vga_write_byte(...)
+/// Unsafe because the user must call a valid location
+/// and use of unsafe function vga_write_byte(...)
 pub unsafe fn vga_write_raw(b: u8, attr: u8, row: u8, col: u8) {
     vga_write_byte(b, row, col); // write byte
     vga_write_byte(attr, row, col + 1); // write attribute at offset
@@ -78,6 +81,7 @@ pub unsafe fn vga_write(sc: ScreenChar, row: u8, col: u8) {
 
 /// Unsafe due to calls to outb(...)
 /// Unsafe writing to port
+/// Unsafe as the position must be within the vga buffer, and it is up to the caller to ensure this
 pub unsafe fn set_vga_cursor_pos(x: u8, y: u8) {
     let pos: u16 = ((y as u16) * (SCREEN_WIDTH as u16) + (x as u16)) as u16;
 
@@ -87,7 +91,7 @@ pub unsafe fn set_vga_cursor_pos(x: u8, y: u8) {
     outb(0x3D5, ((pos >> 8) & 0xFF) as u16);
 }
 
-pub struct Writer {
+pub struct Writer { // TODO: optimize Writer
     col_pos: u8, // the current column position in the buffer
     row_pos: u8, // the current row position in the buffer
     def_attr: u8, // the default attribute byte for writing
@@ -95,10 +99,9 @@ pub struct Writer {
     current_bg: Color,
     drawing: bool, // true if the system is allowed to write to the screen
     screen_buf_pos: u8, // the current position of the start of the screen in the data buffer
-    buffer: [[ScreenChar; SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize], // all data written to the screen, including what is not displayed
+    buffer: [[ScreenChar; SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize],
+    // all data written to the screen, including what is not displayed
 }
-
-// TODO: rework system to write to the bottom of the buffer first, and push everything up
 
 impl Writer {
     pub fn new() -> Writer {
@@ -110,7 +113,8 @@ impl Writer {
             current_bg: Color::Black,
             drawing: true,
             screen_buf_pos: 0,
-            buffer: [[ScreenChar::new(b' ', color(Color::White, Color::Black)); SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize],
+            buffer: [[ScreenChar::new(b' ', color(Color::White, Color::Black));
+                SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize],
         }
     }
 
@@ -179,9 +183,11 @@ impl Writer {
             // shift all lines up to make room for new lines at the end of the buffer
             for x in 0..DATA_BUFFER_SIZE {
                 if x != DATA_BUFFER_SIZE - 1 {
-                    self.buffer[x as usize] = self.buffer[(x + 1) as usize]; // set the value in buffer[x + 1] to buffer[x] to move everything up
+                    self.buffer[x as usize] = self.buffer[(x + 1) as usize];
+                    // set the value in buffer[x + 1] to buffer[x] to move everything up
                 } else {
-                    self.buffer[x as usize] = [ScreenChar::new(b' ', self.def_attr); SCREEN_WIDTH as usize]; // clear last entry
+                    self.buffer[x as usize] = [ScreenChar::new(b' ', self.def_attr);
+                        SCREEN_WIDTH as usize]; // clear last entry
                 }
             }
             self.draw();
@@ -189,14 +195,16 @@ impl Writer {
         }
 
         // check the current pos on screen is not the end
-        if self.row_pos < self.screen_buf_pos + (SCREEN_HEIGHT - 1) { // for when not moving position in buffer, only on screen
+        if self.row_pos < self.screen_buf_pos + (SCREEN_HEIGHT - 1) {
+            // for when not moving position in buffer, only on screen
             self.row_pos += 1;
             self.draw();
             return;
         }
 
         // check that the position of the screen is before the end of the buffer
-        if self.screen_buf_pos < DATA_BUFFER_SIZE - SCREEN_HEIGHT { // shifts the screen down by one and sets the row position accordingly
+        if self.screen_buf_pos < DATA_BUFFER_SIZE - SCREEN_HEIGHT {
+            // shifts the screen down by one and sets the row position accordingly
             self.screen_buf_pos += 1;
             self.row_pos += 1;
             self.draw();
@@ -223,7 +231,9 @@ impl Writer {
     }
 
     pub fn clear(&mut self) {
-        self.buffer = [[ScreenChar::new(b' ', color(Color::White, Color::Black)); SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize];
+        self.buffer = [[ScreenChar::new(b' ',
+                                        color(Color::White, Color::Black));
+            SCREEN_WIDTH as usize]; DATA_BUFFER_SIZE as usize];
         self.col_pos = 0;
         self.set_fg_color(b'f');
         self.row_pos = 0;
@@ -239,10 +249,13 @@ impl Writer {
             b'\x08' => self.backspace(), // backspace
             byte => { // if the byte is a normal character, print it to the buffer
                 // set the correct location
-                self.buffer[self.row_pos as usize][self.col_pos as usize] = ScreenChar::new(byte, color);
+                self.buffer[self.row_pos as usize][self.col_pos as usize]
+                    = ScreenChar::new(byte, color);
 
-                self.col_pos += 1; // increment the column position in the buffer (column = character in the line)
-                if self.col_pos >= 80 { // check if the current column position is at the end of the line
+                self.col_pos += 1; // increment the column position in the buffer
+                // (column = character in the line)
+                if self.col_pos >= SCREEN_WIDTH {
+                    // check if the current column position is at the end of the line
                     self.newline(); // go to the next line
                 }
             }
@@ -251,10 +264,12 @@ impl Writer {
 
     /// Writes a byte to the buffer with the default color attribute of the writer
     pub fn write_byte(&mut self, byte: u8) {
-        self.write_byte_colored(byte, self.def_attr); // write the byte with the current default color attribute
+        self.write_byte_colored(byte, self.def_attr);
+        // write the byte with the current default color attribute
     }
 
-    /// Writes a character to the screen, but checks it to make sure its something that can be printed
+    /// Writes a character to the screen,
+    /// but checks it to make sure its something that can be printed
     fn write_valid_byte(&mut self, byte: u8) {
         match byte {
             // match the non color code byte
@@ -458,11 +473,13 @@ impl Writer {
         }
         for row in 0..SCREEN_HEIGHT { // all the rows (lines) on the screen
             for col in 0..SCREEN_WIDTH { // all the characters on the current line
-                let byte = self.buffer[(self.screen_buf_pos + row) as usize][col as usize];
+                let byte
+                    = self.buffer[(self.screen_buf_pos + row) as usize][col as usize];
                 unsafe {
                     // Write the current screenchar to the screen
                     vga_write(byte, row, col * 2);
-                    // get the current row position in the buffer ^         col * 2 to account for attribute bytes ^
+                    // get the current row position in the buffer
+                    // col * 2 to account for attribute bytes
                 }
             }
         }

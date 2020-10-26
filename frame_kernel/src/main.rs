@@ -18,13 +18,17 @@ use frame_kernel::{
 use frame_kernel::logger::Logger;
 use frame_kernel::logo_print::print_logo;
 use frame_kernel::task::keyboard;
-use frame_kernel::write_channel::stdout;
+use frame_kernel::write_channel::{ChannelSTDOUT, stdout};
 
 // define the entry point as kmain() instead of _start()
 entry_point!(kmain);
 
 // access the version as defined in cargo.toml
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
+
+// create the logger
+const logger: Logger<ChannelSTDOUT> = Logger::new(&stdout);
 
 // ================= ENTRY POINT
 
@@ -35,7 +39,7 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
     println!("&bFrame&3OS &5v&d{} &9By &3Eric (Sk3pz) &9&& &3Matthew (MooCow9M)\n", VERSION);
     println!();
     print_logo();
-    print!("&7%0");
+    print!("&7%0"); // reset colors
     frame_kernel::init(); // initialize the interrupt handlers
 
     // the physical memory offset
@@ -51,15 +55,9 @@ fn kmain(boot_info: &'static BootInfo) -> ! {
 
     // ================= MAIN RUNTIME CODE
 
-    let logger = Logger::new(&stdout);
-
     let mut executor = Executor::new();
 
-    executor.spawn(Task::new(keyboard::print_keypresses())); // enables keyboard input
-
-    // for x in 0..999 {
-    //     logger.info(&("X: ".to_string() + &x.to_string()));
-    // }
+    executor.spawn(Task::new(keyboard::handle_keypresses())); // enables keyboard input
 
     executor.run();
 
