@@ -13,7 +13,7 @@ impl Folder {
                           // TODO: Implement
     }
     pub fn exists(&self) -> bool {
-        true // TODO: Implement
+        false // TODO: Implement
     }
 }
 
